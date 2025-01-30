@@ -43,3 +43,8 @@ jobs:
       with:
         file: ./coverage.xml
         flags: unittests
+
+    # .github/workflows/python-app.yml に追加
+    - name: Run database migration tests
+      run: |
+        pytest tests/test_migrations.py -v
