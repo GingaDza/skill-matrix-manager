@@ -1,3 +1,7 @@
-PyQt5>=5.15.0
-SQLAlchemy>=1.4.0
-pytest>=7.0.0
+# requirements.txt
+
+SQLAlchemy==2.0.23
+PyQt5==5.15.11
+pytest==8.3.4
+pytest-cov==6.0.0
+pytest-qt==4.4.0
