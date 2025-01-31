@@ -1,3 +1,4 @@
+# .github/workflows/lint.yml
 name: Linting
 
 on:
@@ -8,17 +9,16 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
-      - name: Get repository content
-        run: |
-          git clone https://github.com/GingaDza/skill-matrix-manager.git .
 
       - name: Install dependencies
         run: |

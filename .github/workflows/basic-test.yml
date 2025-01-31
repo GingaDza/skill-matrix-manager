@@ -1,3 +1,4 @@
+# .github/workflows/basic-test.yml を修正
 name: Basic Test Workflow
 
 on:
@@ -8,30 +9,28 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Debug Information
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Directory contents:"
-          ls -la
-          echo "Ubuntu version:"
-          lsb_release -a
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Get repository content
+      - name: Debug Information
         run: |
-          git clone https://github.com/GingaDza/skill-matrix-manager.git .
-          echo "Repository contents:"
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
           ls -la
+          echo "Python version:"
+          python --version
+          echo "Pip version:"
+          pip --version
 
       - name: Basic Python test
         run: |
-          python --version
           python -c "print('Basic test successful')"
