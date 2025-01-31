@@ -1,4 +1,3 @@
-# .github/workflows/lint.yml
 name: Linting
 
 on:
