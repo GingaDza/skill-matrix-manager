@@ -1,12 +1,22 @@
-import sys
-from PyQt5.QtWidgets import QApplication
-from app.views.main_window import MainWindow
+# src/app/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from .routes import api_router
+from .database import Base, engine
 
-def main():
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+app = FastAPI(title="Skill Matrix API")
 
-if __name__ == "__main__":
-    main()
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ルーターの設定
+app.include_router(api_router, prefix="/api")  # プレフィックスを "/api" に変更
+
+# 起動時にデータベースのテーブルを作成
+Base.metadata.create_all(bind=engine)

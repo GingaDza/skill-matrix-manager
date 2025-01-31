@@ -56,3 +56,6 @@ coverage.xml
 # Environment variables
 .env
 .env.*
+
+# .gitignore
+test.db

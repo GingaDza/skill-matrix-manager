@@ -1,12 +1,10 @@
-# tests/test_base.py
 import pytest
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, create_engine
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Session, declarative_base
 from src.app.models.base import TimestampMixin
 
-# tests/test_base.py
-def test_timestamp_mixin(db):
+def test_timestamp_mixin(db: Session):
     """タイムスタンプミックスインのテスト"""
     TestBase = declarative_base()
 
@@ -27,6 +25,18 @@ def test_timestamp_mixin(db):
         # 検証
         assert isinstance(instance.created_at, datetime)
         assert isinstance(instance.updated_at, datetime)
+        
+        # 更新前の時刻を保存
+        original_created_at = instance.created_at
+        original_updated_at = instance.updated_at
+
+        # 更新
+        instance.name = "updated"
+        db.flush()
+
+        # 更新後の検証
+        assert instance.created_at == original_created_at  # created_atは変更されない
+        assert instance.updated_at > original_updated_at  # updated_atは更新される
 
     finally:
         # クリーンアップ

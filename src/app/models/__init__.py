@@ -1,16 +1,18 @@
 # src/app/models/__init__.py
-from .base import Base, TimestampMixin
-from .category import Category
-from .skill import Skill
-from .user import User
-from .assessment import SkillAssessment, ProficiencyLevel
+from ..database import Base
+from .enums import ProficiencyLevel
+from .base import TimestampMixin
+from .category import Category  # 先にCategoryをインポート
+from .skill import Skill  # 次にSkill
+from .user import User  # 次にUser
+from .skill_assessment import SkillAssessment  # 最後にSkillAssessment
 
 __all__ = [
-    'Base', 
-    'TimestampMixin', 
-    'Category', 
-    'Skill', 
-    'User', 
+    'Base',
+    'TimestampMixin',
+    'Category',
+    'Skill',
+    'User',
     'SkillAssessment',
     'ProficiencyLevel'
 ]
