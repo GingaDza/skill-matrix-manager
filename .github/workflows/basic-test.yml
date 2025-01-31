@@ -1,0 +1,39 @@
+name: Basic Test Workflow
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Show environment info
+      run: |
+        pwd
+        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+        echo "GITHUB_SHA: $GITHUB_SHA"
+        echo "GITHUB_REF: $GITHUB_REF"
+
+    - name: Set up Python
+      run: |
+        sudo apt update
+        sudo apt install -y python3.10 python3.10-venv python3-pip
+        python3.10 -m venv venv
+        source venv/bin/activate
+        python --version
+
+    - name: Get repository content
+      run: |
+        git clone https://github.com/GingaDza/skill-matrix-manager.git .
+        git checkout $GITHUB_SHA
+        ls -la
+
+    - name: Basic Python test
+      run: |
+        source venv/bin/activate
+        python -c "print('Basic test successful')"
+        ls -la
