@@ -1,9 +1,6 @@
 [tool.black]
 line-length = 127
 include = '\.pyi?$'
-extend-exclude = '''
-^/migrations/
-'''
 
 [tool.isort]
 profile = "black"

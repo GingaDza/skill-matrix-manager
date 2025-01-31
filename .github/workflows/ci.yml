@@ -9,12 +9,36 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.11']
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      
+      - name: Debug Info
+        run: |
+          echo "Current working directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "System Python versions:"
+          ls /usr/bin/python*
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
           cache: 'pip'
+      
+      - name: Verify Python
+        run: |
+          echo "Python version:"
+          python --version
+          echo "Pip version:"
+          pip --version
+          echo "Python location:"
+          which python
       
       - name: Install dependencies
         run: |
@@ -23,17 +47,19 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-
-      - name: Run tests
+      
+      - name: Test and Lint
         run: |
-          pytest -v --cov=src --cov-report=term-missing
-
-      - name: Check code formatting
-        run: |
+          # Run tests first
+          python -c "print('=== Running Tests ===')"
+          pytest -v
+          
+          # Then run formatters
+          python -c "print('\n=== Checking Code Format ===')"
           black . --check
           isort . --check-only
-
-      - name: Run linting
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --max-line-length=127
-          pylint src tests --disable=C0111,C0103 || true
+          
+          # Finally run linters
+          python -c "print('\n=== Running Linters ===')"
+          flake8 . --max-line-length=127
+          pylint src tests || true
