@@ -1,3 +1,4 @@
+# .github/workflows/basic-test.yml
 name: Basic Test Workflow
 
 on:
@@ -8,32 +9,30 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-    - name: Show environment info
-      run: |
-        pwd
-        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-        echo "GITHUB_SHA: $GITHUB_SHA"
-        echo "GITHUB_REF: $GITHUB_REF"
+      - name: Debug Information
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          echo "Ubuntu version:"
+          lsb_release -a
 
-    - name: Set up Python
-      run: |
-        sudo apt update
-        sudo apt install -y python3.10 python3.10-venv python3-pip
-        python3.10 -m venv venv
-        source venv/bin/activate
-        python --version
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Get repository content
-      run: |
-        git clone https://github.com/GingaDza/skill-matrix-manager.git .
-        git checkout $GITHUB_SHA
-        ls -la
+      - name: Get repository content
+        run: |
+          git clone https://github.com/GingaDza/skill-matrix-manager.git .
+          echo "Repository contents:"
+          ls -la
 
-    - name: Basic Python test
-      run: |
-        source venv/bin/activate
-        python -c "print('Basic test successful')"
-        ls -la
+      - name: Basic Python test
+        run: |
+          python --version
+          python -c "print('Basic test successful')"
