@@ -1,40 +1,40 @@
-# src/desktop/main.py
-"""
-Main application entry point
-Created: 2025-01-31 13:37:42
-Author: GingaDza
-"""
 import sys
+from PyQt6.QtWidgets import QApplication
+from views.main_window import MainWindow
+import logging
 from datetime import datetime
-import os
-from PySide6.QtWidgets import QApplication
-from .gui.main_window import MainWindow
-from .models.data_manager import DataManager
 
-# MacOS特有の設定
-os.environ['QT_MAC_WANTS_LAYER'] = '1'
+# デバッグ用にログ設定
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-class SkillMatrixApp(QApplication):
-    def __init__(self, argv):
-        super().__init__(argv)
-        
-        # アプリケーション情報の表示
-        current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-        print("Starting Skill Matrix Manager...")
-        print(f"Current Time (UTC): {current_time}")
-        print(f"Current User: GingaDza")
-        
-        # メインウィンドウの設定と表示
-        self.main_window = MainWindow()
-        self.main_window.show()
+CURRENT_TIME = datetime(2025, 2, 3, 10, 39, 38)
+CURRENT_USER = "GingaDza"
 
 def main():
+    logger.debug(f"{CURRENT_TIME} - {CURRENT_USER} Application starting")
+    
     try:
-        app = SkillMatrixApp(sys.argv)
-        return app.exec()
+        app = QApplication(sys.argv)
+        logger.debug(f"{CURRENT_TIME} - {CURRENT_USER} QApplication created")
+        
+        window = MainWindow(controllers=None)
+        logger.debug(f"{CURRENT_TIME} - {CURRENT_USER} MainWindow created")
+        
+        window.show()
+        logger.debug(f"{CURRENT_TIME} - {CURRENT_USER} MainWindow shown")
+        
+        return_code = app.exec()
+        logger.debug(f"{CURRENT_TIME} - {CURRENT_USER} Application finished with return code: {return_code}")
+        sys.exit(return_code)
+        
     except Exception as e:
-        print(f"Error: {e}")
-        return 1
+        logger.error(f"{CURRENT_TIME} - {CURRENT_USER} Application error: {str(e)}")
+        logger.exception("Detailed traceback:")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

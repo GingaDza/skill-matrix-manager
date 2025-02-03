@@ -1,0 +1,78 @@
+from PyQt6.QtWidgets import (
+    QMainWindow, QTabWidget, QWidget, QVBoxLayout,
+    QStatusBar, QLabel
+)
+from datetime import datetime
+from .tabs.system_management.initial_settings.initial_settings_tab import InitialSettingsTab
+import logging
+
+logger = logging.getLogger(__name__)
+
+class MainWindow(QMainWindow):
+    def __init__(self, controllers=None):
+        super().__init__()
+        self.controllers = controllers
+        self.current_time = datetime(2025, 2, 3, 10, 18, 16)
+        self.current_user = "GingaDza"
+        
+        self.initUI()
+    
+    def initUI(self):
+        """UIの初期化"""
+        try:
+            # ウィンドウの基本設定
+            self.setWindowTitle('スキルマトリクスシステム')
+            self.setMinimumSize(1200, 800)
+            
+            # メインウィジェット
+            main_widget = QWidget()
+            self.setCentralWidget(main_widget)
+            
+            # メインレイアウト
+            main_layout = QVBoxLayout(main_widget)
+            main_layout.setContentsMargins(5, 5, 5, 5)
+            
+            # タブウィジェットの作成
+            self.tab_widget = QTabWidget()
+            self.tab_widget.setTabPosition(QTabWidget.TabPosition.North)
+            self.tab_widget.setMovable(True)
+            
+            # システム管理タブの追加
+            initial_settings_tab = InitialSettingsTab(self.controllers)
+            self.tab_widget.addTab(initial_settings_tab, "システム管理")
+            
+            # レイアウトにタブウィジェットを追加
+            main_layout.addWidget(self.tab_widget)
+            
+            # ステータスバーの設定
+            self.setup_status_bar()
+            
+            logger.debug(f"{self.current_time} - {self.current_user} initialized MainWindow UI")
+            
+        except Exception as e:
+            logger.error(f"{self.current_time} - {self.current_user} failed to initialize MainWindow UI: {str(e)}")
+            raise
+
+    def setup_status_bar(self):
+        """ステータスバーの設定"""
+        try:
+            status_bar = QStatusBar()
+            self.setStatusBar(status_bar)
+            
+            # バージョン情報
+            version_label = QLabel("Version 1.0.0")
+            status_bar.addPermanentWidget(version_label)
+            
+            # ユーザー情報
+            user_label = QLabel(f"ログインユーザー: {self.current_user}")
+            status_bar.addPermanentWidget(user_label)
+            
+            # 現在時刻
+            time_label = QLabel(self.current_time.strftime("%Y-%m-%d %H:%M:%S"))
+            status_bar.addPermanentWidget(time_label)
+            
+            logger.debug(f"{self.current_time} - {self.current_user} setup status bar")
+            
+        except Exception as e:
+            logger.error(f"{self.current_time} - {self.current_user} failed to setup status bar: {str(e)}")
+            raise
