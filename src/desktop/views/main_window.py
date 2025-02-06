@@ -13,7 +13,7 @@ class MainWindow(QMainWindow):
     def __init__(self, controllers=None):
         super().__init__()
         self.controllers = controllers
-        self.current_time = datetime(2025, 2, 3, 10, 51, 13)
+        self.current_time = datetime.now()
         self.current_user = "GingaDza"
         
         logger.debug(f"{self.current_time} - {self.current_user} Initializing MainWindow")
@@ -39,7 +39,6 @@ class MainWindow(QMainWindow):
             self.tab_widget.setMovable(True)
             
             # システム管理タブの追加
-            logger.debug(f"{self.current_time} - {self.current_user} Creating SystemManagementTab")
             system_management_tab = SystemManagementTab(self.controllers)
             self.tab_widget.addTab(system_management_tab, "システム管理")
             
@@ -52,35 +51,24 @@ class MainWindow(QMainWindow):
             logger.debug(f"{self.current_time} - {self.current_user} MainWindow UI initialization completed")
             
         except Exception as e:
-            logger.error(f"{self.current_time} - {self.current_user} Error in MainWindow UI initialization: {str(e)}")
+            logger.error(f"{self.current_time} - {self.current_user} Error in MainWindow UI initialization: {e}")
             logger.exception("Detailed traceback:")
             raise
 
     def setup_status_bar(self):
-        """ステータスバーの設定"""
         try:
-            logger.debug(f"{self.current_time} - {self.current_user} Setting up status bar")
-            
-            # ステータスバーの作成
             status_bar = QStatusBar()
             self.setStatusBar(status_bar)
             
-            # ユーザー情報の表示
             user_label = QLabel(f"ユーザー: {self.current_user}")
             status_bar.addWidget(user_label)
             
-            # 時刻情報の表示
             time_label = QLabel(f"時刻: {self.current_time.strftime('%Y-%m-%d %H:%M:%S')}")
             status_bar.addPermanentWidget(time_label)
             
             logger.debug(f"{self.current_time} - {self.current_user} Status bar setup completed")
             
         except Exception as e:
-            logger.error(f"{self.current_time} - {self.current_user} Error in status bar setup: {str(e)}")
+            logger.error(f"{self.current_time} - {self.current_user} Error in status bar setup: {e}")
             logger.exception("Detailed traceback:")
             raise
-
-    def closeEvent(self, event):
-        """ウィンドウが閉じられる時のイベント"""
-        logger.info(f"{self.current_time} - {self.current_user} closing MainWindow")
-        event.accept()
