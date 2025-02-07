@@ -183,3 +183,122 @@ class DatabaseManager:
             raise
         finally:
             conn.close()
+
+    # カテゴリー管理メソッド
+    def get_all_categories(self):
+        """すべてのカテゴリーを取得"""
+        query = """
+        SELECT id, name, description, parent_id, created_at, updated_at 
+        FROM categories 
+        ORDER BY name
+        """
+        return self.execute_query(query)
+
+    def get_all_categories_with_skills(self):
+        """スキル情報を含むすべてのカテゴリーを取得"""
+        query = """
+        SELECT 
+            c.id,
+            c.name,
+            c.description,
+            c.parent_id,
+            c.created_at,
+            c.updated_at,
+            COUNT(s.id) as skill_count,
+            GROUP_CONCAT(s.name) as skill_names
+        FROM categories c
+        LEFT JOIN skills s ON c.id = s.category_id
+        GROUP BY c.id
+        ORDER BY c.name
+        """
+        return self.execute_query(query)
+
+    def get_category(self, category_id):
+        """指定されたIDのカテゴリーを取得"""
+        query = """
+        SELECT id, name, description, parent_id, created_at, updated_at 
+        FROM categories 
+        WHERE id = ?
+        """
+        result = self.execute_query(query, (category_id,))
+        return result[0] if result else None
+
+    def add_category(self, name, description="", parent_id=None):
+        """新しいカテゴリーを追加"""
+        query = """
+        INSERT INTO categories (name, description, parent_id) 
+        VALUES (?, ?, ?)
+        """
+        try:
+            return self.execute_query(query, (name, description, parent_id))
+        except sqlite3.IntegrityError:
+            self.logger.error(f"カテゴリー '{name}' の追加に失敗しました")
+            return False
+
+    def update_category(self, category_id, name, description="", parent_id=None):
+        """カテゴリー情報を更新"""
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        query = """
+        UPDATE categories 
+        SET name = ?, description = ?, parent_id = ?, updated_at = ? 
+        WHERE id = ?
+        """
+        return self.execute_query(
+            query,
+            (name, description, parent_id, current_time, category_id)
+        )
+
+    def delete_category(self, category_id):
+        """カテゴリーを削除"""
+        # 子カテゴリーの確認
+        query = "SELECT id FROM categories WHERE parent_id = ?"
+        children = self.execute_query(query, (category_id,))
+        
+        if children:
+            self.logger.error(f"カテゴリーID {category_id} には子カテゴリーが存在するため削除できません")
+            return False
+
+        # スキルの確認
+        query = "SELECT id FROM skills WHERE category_id = ?"
+        skills = self.execute_query(query, (category_id,))
+        
+        if skills:
+            self.logger.error(f"カテゴリーID {category_id} にはスキルが存在するため削除できません")
+            return False
+
+        # カテゴリーの削除
+        query = "DELETE FROM categories WHERE id = ?"
+        return self.execute_query(query, (category_id,))
+
+    def get_category_hierarchy(self):
+        """カテゴリーの階層構造を取得"""
+        query = """
+        WITH RECURSIVE category_tree AS (
+            -- ルートカテゴリー
+            SELECT 
+                id,
+                name,
+                description,
+                parent_id,
+                0 as level,
+                CAST(name as TEXT) as path
+            FROM categories
+            WHERE parent_id IS NULL
+
+            UNION ALL
+
+            -- 子カテゴリー
+            SELECT 
+                c.id,
+                c.name,
+                c.description,
+                c.parent_id,
+                ct.level + 1,
+                ct.path || '/' || c.name
+            FROM categories c
+            JOIN category_tree ct ON c.parent_id = ct.id
+        )
+        SELECT * FROM category_tree
+        ORDER BY path;
+        """
+        return self.execute_query(query)
