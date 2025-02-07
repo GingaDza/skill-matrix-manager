@@ -277,14 +277,25 @@ class MainWindow(QMainWindow):
             if reply == QMessageBox.StandardButton.Yes:
                 user_id = selected_items[0].data(Qt.ItemDataRole.UserRole)
                 group_id = self.group_combo.currentData()
+                
+                # ユーザーの存在確認
+                user = self.db.get_user(user_id)
+                if not user:
+                    QMessageBox.warning(self, "警告", "ユーザーが見つかりません")
+                    return
+                
                 try:
                     if self.db.delete_user(user_id):
                         self.logger.debug(f"Deleting user {user_id}")
                         self.load_users(group_id)
+                        QMessageBox.information(self, "完了", "ユーザーを削除しました")
                     else:
-                        raise Exception("User not found")
+                        QMessageBox.warning(self, "警告", "ユーザーの削除に失敗しました")
                 except Exception as e:
                     self.logger.error(f"Database error while deleting user: {e}")
+                    QMessageBox.critical(self, "エラー", "ユーザーの削除に失敗しました")
+        except Exception as e:
+            self.logger.error(f"Error in delete_user: {e}", exc_info=True)
                     QMessageBox.critical(self, "エラー", "ユーザーの削除に失敗しました")
         except Exception as e:
             self.logger.error(f"Error in delete_user: {e}", exc_info=True)

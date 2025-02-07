@@ -6,7 +6,7 @@ import os
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 14:45:27"
+        self.current_time = "2025-02-07 14:49:24"
         self.db_path = "database/skill_matrix.db"
         
         # データベースディレクトリの作成
@@ -44,8 +44,12 @@ class DatabaseManager:
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
                         FOREIGN KEY (group_id) REFERENCES groups (id)
+                            ON DELETE CASCADE
                     )
                 ''')
+                
+                # 外部キー制約を有効化
+                cursor.execute("PRAGMA foreign_keys = ON")
                 
                 # 初期データの挿入
                 self._insert_initial_data(cursor)
@@ -58,25 +62,30 @@ class DatabaseManager:
 
     def _insert_initial_data(self, cursor):
         """初期データの挿入"""
-        # 既存のグループをチェック
-        cursor.execute("SELECT COUNT(*) FROM groups")
-        if cursor.fetchone()[0] == 0:
-            # グループの追加
-            groups = [
-                ("開発部", self.current_time, self.current_time),
-                ("営業部", self.current_time, self.current_time),
-                ("管理部", self.current_time, self.current_time)
-            ]
-            cursor.executemany(
-                "INSERT INTO groups (name, created_at, updated_at) VALUES (?, ?, ?)",
-                groups
-            )
+        try:
+            # 既存のグループをチェック
+            cursor.execute("SELECT COUNT(*) FROM groups")
+            if cursor.fetchone()[0] == 0:
+                # グループの追加
+                groups = [
+                    ("開発部", self.current_time, self.current_time),
+                    ("営業部", self.current_time, self.current_time),
+                    ("管理部", self.current_time, self.current_time)
+                ]
+                cursor.executemany(
+                    "INSERT INTO groups (name, created_at, updated_at) VALUES (?, ?, ?)",
+                    groups
+                )
+        except Exception as e:
+            self.logger.error(f"Error inserting initial data: {e}", exc_info=True)
+            raise
 
     def get_all_groups(self):
         """全グループを取得"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute("SELECT id, name FROM groups ORDER BY id")
                 return cursor.fetchall()
         except Exception as e:
@@ -88,6 +97,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute(
                     "SELECT id, name FROM users WHERE group_id = ? ORDER BY id",
                     (group_id,)
@@ -102,6 +112,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute(
                     """
                     INSERT INTO users (name, group_id, created_at, updated_at)
@@ -120,6 +131,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute(
                     """
                     UPDATE users
@@ -139,9 +151,38 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
+                
+                # ユーザーが存在するか確認
+                cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+                if not cursor.fetchone():
+                    self.logger.warning(f"User {user_id} not found")
+                    return False
+                
+                # ユーザーを削除
                 cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 conn.commit()
-                return cursor.rowcount > 0
+                
+                deleted = cursor.rowcount > 0
+                if deleted:
+                    self.logger.info(f"User {user_id} deleted successfully")
+                return deleted
+                
         except Exception as e:
             self.logger.error(f"Error deleting user {user_id}: {e}", exc_info=True)
             raise
+
+    def get_user(self, user_id):
+        """ユーザー情報を取得"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
+                cursor.execute(
+                    "SELECT id, name, group_id FROM users WHERE id = ?",
+                    (user_id,)
+                )
+                return cursor.fetchone()
+        except Exception as e:
+            self.logger.error(f"Error fetching user {user_id}: {e}", exc_info=True)
+            return None
