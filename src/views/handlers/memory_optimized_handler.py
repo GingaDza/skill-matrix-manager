@@ -266,7 +266,7 @@ class MemoryOptimizedHandler(QObject):
         except Exception as e:
             self.logger.error(f"自動クリーンアップエラー: {e}")
 
-[続く...]
+
 
     @pyqtSlot()
     def _process_update(self):
