@@ -15,8 +15,13 @@ class DatabaseManager:
         self.db_path = "data/skill_matrix.db"
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
+        # 古いデータベースファイルを削除
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+            self.logger.info("古いデータベースファイルを削除しました")
+        
         # 時刻の設定
-        self.current_time = "2025-02-07 22:51:04"
+        self.current_time = "2025-02-07 22:53:04"
         
         # データベースの初期化
         self._initialize_db()
@@ -45,9 +50,12 @@ class DatabaseManager:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # 外部キー制約を有効化
+                cursor.execute("PRAGMA foreign_keys = ON")
+                
                 # グループテーブル
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS groups (
+                    CREATE TABLE groups (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL UNIQUE,
                         created_at TEXT NOT NULL,
@@ -57,7 +65,7 @@ class DatabaseManager:
                 
                 # ユーザーテーブル
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
+                    CREATE TABLE users (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL,
                         group_id INTEGER,
@@ -70,7 +78,7 @@ class DatabaseManager:
                 
                 # スキルテーブル
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS skills (
+                    CREATE TABLE skills (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL UNIQUE,
                         category TEXT NOT NULL,
@@ -81,7 +89,7 @@ class DatabaseManager:
                 
                 # ユーザースキルテーブル
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS user_skills (
+                    CREATE TABLE user_skills (
                         user_id INTEGER,
                         skill_id INTEGER,
                         level INTEGER NOT NULL DEFAULT 0,
