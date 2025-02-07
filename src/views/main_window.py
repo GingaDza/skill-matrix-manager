@@ -3,11 +3,8 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QComboBox,
-    QPushButton,
     QListWidget,
     QTabWidget,
-    QLabel,
     QSplitter
 )
 from PyQt6.QtCore import Qt
@@ -36,33 +33,10 @@ class MainWindow(QMainWindow):
         # スプリッター（3:7の分割）
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # 左パネル（3）
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-
-        # グループ選択
-        group_layout = QHBoxLayout()
-        group_layout.addWidget(QLabel("グループ:"))
-        self.group_combo = QComboBox()
-        group_layout.addWidget(self.group_combo)
-        left_layout.addLayout(group_layout)
-
-        # ユーザーリスト
-        self.user_list = QListWidget()
-        left_layout.addWidget(self.user_list)
-
-        # ボタン群
-        button_layout = QVBoxLayout()
-        self.add_user_btn = QPushButton("追加")
-        self.edit_user_btn = QPushButton("編集")
-        self.delete_user_btn = QPushButton("削除")
-        
-        button_layout.addWidget(self.add_user_btn)
-        button_layout.addWidget(self.edit_user_btn)
-        button_layout.addWidget(self.delete_user_btn)
-        left_layout.addLayout(button_layout)
-
-        splitter.addWidget(left_panel)
+        # 左パネル（3）：リスト表示のみ
+        self.list_widget = QListWidget()
+        self.list_widget.itemSelectionChanged.connect(self.on_list_selection_changed)
+        splitter.addWidget(self.list_widget)
 
         # 右パネル（7）
         right_panel = QWidget()
@@ -95,16 +69,14 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 7)
 
         main_layout.addWidget(splitter)
-        
-        # 初期データのロード
-        self.load_initial_data()
 
-    def load_initial_data(self):
-        """初期データのロード"""
-        groups = self.db.get_all_groups()
-        self.group_combo.clear()
-        for group in groups:
-            self.group_combo.addItem(group[1], group[0])
+    def on_list_selection_changed(self):
+        """リスト選択時の処理"""
+        selected_items = self.list_widget.selectedItems()
+        if selected_items:
+            selected_item = selected_items[0]
+            # 選択されたアイテムに応じた処理を実装
+            pass
 
     def add_category_tab(self, category_name):
         """カテゴリータブの追加"""
