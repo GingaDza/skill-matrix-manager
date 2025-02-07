@@ -2,7 +2,7 @@
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QtMsgType
 from .utils.memory_profiler import MemoryProfiler
-import logging
+from .utils.type_manager import TypeManagerimport logging
 import sys
 import psutil
 import gc
@@ -14,7 +14,8 @@ class SkillMatrixApp(QApplication):
     """スキルマトリックスアプリケーション"""
     
     def __init__(self, argv):
-        super().__init__(argv)
+        self._type_manager = TypeManager()
+        self.logger.debug("Type manager initialized")        super().__init__(argv)
         
         # ロガーの設定
         self.logger = logging.getLogger(__name__)
@@ -122,7 +123,9 @@ class SkillMatrixApp(QApplication):
         except Exception as e:
             self.logger.error(f"メッセージハンドリングエラー: {e}")
 
-    def cleanup(self):
+        # 型管理システムのクリーンアップ
+        self._type_manager.cleanup()
+        self.logger.debug("Type manager cleaned up")    def cleanup(self):
         """アプリケーションのクリーンアップ"""
         try:
             # メモリリークの検出
