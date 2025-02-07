@@ -2,7 +2,8 @@
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QtMsgType
 from .utils.memory_profiler import MemoryProfiler
-from .utils.type_manager import TypeManagerimport logging
+from .utils.type_manager import TypeManager
+import logging
 import sys
 import psutil
 import gc
@@ -14,8 +15,7 @@ class SkillMatrixApp(QApplication):
     """スキルマトリックスアプリケーション"""
     
     def __init__(self, argv):
-        self._type_manager = TypeManager()
-        self.logger.debug("Type manager initialized")        super().__init__(argv)
+        super().__init__(argv)
         
         # ロガーの設定
         self.logger = logging.getLogger(__name__)
@@ -24,6 +24,10 @@ class SkillMatrixApp(QApplication):
         # メモリプロファイラーの初期化
         self._profiler = MemoryProfiler()
         self._profiler.take_snapshot()
+        
+        # 型管理システムの初期化
+        self._type_manager = TypeManager()
+        self.logger.debug("Type manager initialized")
         
         # macOS固有の設定
         self._configure_macos()
@@ -123,9 +127,7 @@ class SkillMatrixApp(QApplication):
         except Exception as e:
             self.logger.error(f"メッセージハンドリングエラー: {e}")
 
-        # 型管理システムのクリーンアップ
-        self._type_manager.cleanup()
-        self.logger.debug("Type manager cleaned up")    def cleanup(self):
+    def cleanup(self):
         """アプリケーションのクリーンアップ"""
         try:
             # メモリリークの検出
@@ -134,6 +136,10 @@ class SkillMatrixApp(QApplication):
                 self.logger.warning("メモリリーク検出:")
                 for leak in leaks:
                     self.logger.warning(f"  {leak}")
+            
+            # 型管理システムのクリーンアップ
+            self._type_manager.cleanup()
+            self.logger.debug("Type manager cleaned up")
             
             # プロファイラーのクリーンアップ
             self._profiler.cleanup()
