@@ -12,6 +12,7 @@ def main():
         app = QApplication(sys.argv)
         window = App()
         window.show()
+        logger.debug("Application main window shown")
         
         return app.exec()
         
