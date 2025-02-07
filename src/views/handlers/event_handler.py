@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QMessageBox, QInputDialog
 from PyQt6.QtCore import QObject, Qt
 import logging
 import traceback
+import weakref
 
 class EventHandler(QObject):
     """イベント処理を管理するハンドラー"""
@@ -9,12 +10,32 @@ class EventHandler(QObject):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.db = db
-        self.main_window = main_window
+        # メインウィンドウへの弱参照を使用
+        self._main_window = weakref.proxy(main_window)
+
+    @property
+    def main_window(self):
+        """メインウィンドウへの安全なアクセス"""
+        try:
+            return self._main_window
+        except ReferenceError:
+            self.logger.error("Main window reference lost")
+            return None
+
+    def cleanup(self):
+        """リソースのクリーンアップ"""
+        self.logger.debug("Cleaning up EventHandler")
+        try:
+            # 参照のクリア
+            self._main_window = None
+            self.db = None
+        except Exception as e:
+            self.logger.error(f"Error during EventHandler cleanup: {e}\n{traceback.format_exc()}")
 
     def on_group_changed(self, index):
         """グループ変更時の処理"""
         self.logger.debug(f"Group changed to index {index}")
-        if index >= 0:
+        if index >= 0 and self.main_window:
             try:
                 self.main_window.data_handler.refresh_user_list()
             except Exception as e:
@@ -22,6 +43,9 @@ class EventHandler(QObject):
 
     def add_user(self):
         """ユーザー追加"""
+        if not self.main_window:
+            return
+
         self.logger.debug("Starting user addition")
         try:
             left_pane = self.main_window.left_pane
@@ -66,6 +90,9 @@ class EventHandler(QObject):
 
     def edit_user(self):
         """ユーザー編集"""
+        if not self.main_window:
+            return
+
         self.logger.debug("Starting user edit")
         try:
             left_pane = self.main_window.left_pane
@@ -118,6 +145,9 @@ class EventHandler(QObject):
 
     def delete_user(self):
         """ユーザー削除"""
+        if not self.main_window:
+            return
+
         self.logger.debug("Starting user deletion")
         try:
             left_pane = self.main_window.left_pane

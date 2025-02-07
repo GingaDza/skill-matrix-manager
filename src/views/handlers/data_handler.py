@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QMessageBox, QListWidgetItem
 from PyQt6.QtCore import QObject, Qt
 import logging
 import traceback
+import weakref
 
 class DataHandler(QObject):
     """データ操作を管理するハンドラー"""
@@ -9,8 +10,29 @@ class DataHandler(QObject):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.db = db
-        self.main_window = main_window
+        # メインウィンドウへの弱参照を使用
+        self._main_window = weakref.proxy(main_window)
         self.is_updating = False
+
+    @property
+    def main_window(self):
+        """メインウィンドウへの安全なアクセス"""
+        try:
+            return self._main_window
+        except ReferenceError:
+            self.logger.error("Main window reference lost")
+            return None
+
+    def cleanup(self):
+        """リソースのクリーンアップ"""
+        self.logger.debug("Cleaning up DataHandler")
+        try:
+            self.is_updating = False
+            # 参照のクリア
+            self._main_window = None
+            self.db = None
+        except Exception as e:
+            self.logger.error(f"Error during DataHandler cleanup: {e}\n{traceback.format_exc()}")
 
     def load_initial_data(self):
         """初期データの読み込み"""
@@ -19,8 +41,9 @@ class DataHandler(QObject):
 
     def refresh_data(self):
         """データの更新"""
-        if self.is_updating:
-            self.logger.debug("Update already in progress, skipping")
+        if self.is_updating or not self.main_window:
+            self.logger.debug("Update skipped: updating=%s, main_window=%s",
+                            self.is_updating, bool(self.main_window))
             return
 
         try:
@@ -34,32 +57,40 @@ class DataHandler(QObject):
             left_pane = self.main_window.left_pane
             current_group_id = left_pane.get_current_group_id()
 
-            left_pane.group_combo.clear()
-            for group_id, group_name in groups:
-                self.logger.debug(f"Adding group: {group_id} - {group_name}")
-                left_pane.group_combo.addItem(group_name, group_id)
+            left_pane.group_combo.blockSignals(True)
+            try:
+                left_pane.group_combo.clear()
+                for group_id, group_name in groups:
+                    self.logger.debug(f"Adding group: {group_id} - {group_name}")
+                    left_pane.group_combo.addItem(group_name, group_id)
 
-            # 現在のグループを再選択
-            if current_group_id is not None:
-                index = left_pane.group_combo.findData(current_group_id)
-                if index >= 0:
-                    left_pane.group_combo.setCurrentIndex(index)
-                    self.logger.debug(f"Restored selection to group ID: {current_group_id}")
-            elif left_pane.group_combo.count() > 0:
-                left_pane.group_combo.setCurrentIndex(0)
-                self.logger.debug("Set initial group selection")
+                # 現在のグループを再選択
+                if current_group_id is not None:
+                    index = left_pane.group_combo.findData(current_group_id)
+                    if index >= 0:
+                        left_pane.group_combo.setCurrentIndex(index)
+                        self.logger.debug(f"Restored selection to group ID: {current_group_id}")
+                elif left_pane.group_combo.count() > 0:
+                    left_pane.group_combo.setCurrentIndex(0)
+                    self.logger.debug("Set initial group selection")
+            finally:
+                left_pane.group_combo.blockSignals(False)
 
             self.refresh_user_list()
             self.logger.debug("Data refresh completed successfully")
 
         except Exception as e:
             self.logger.error(f"Error refreshing data: {e}\n{traceback.format_exc()}")
-            QMessageBox.critical(self.main_window, "エラー", "データの更新に失敗しました")
+            if self.main_window:
+                QMessageBox.critical(self.main_window, "エラー", "データの更新に失敗しました")
         finally:
             self.is_updating = False
 
     def refresh_user_list(self):
         """ユーザーリストの更新"""
+        if not self.main_window:
+            return
+
         try:
             left_pane = self.main_window.left_pane
             group_id = left_pane.get_current_group_id()
