@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 import logging
 from typing import Optional
 from ..database.database_manager import DatabaseManager
@@ -10,6 +10,9 @@ from .handlers.event_handler import EventHandler
 
 class MainWindow(QMainWindow):
     """メインウィンドウクラス"""
+    
+    # カスタムシグナル
+    window_closed = pyqtSignal()  # ウィンドウが閉じられた時のシグナル
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -114,6 +117,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """終了時の処理"""
         try:
+            self.logger.info("ウィンドウのクローズイベントを処理")
+            
             # データハンドラーのクリーンアップ
             if hasattr(self, 'data_handler'):
                 self.data_handler.cleanup()
@@ -122,8 +127,13 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'event_handler'):
                 self.event_handler.cleanup()
                 
+            # 閉じるシグナルの発行
+            self.window_closed.emit()
+            
             # 基底クラスの処理
             super().closeEvent(event)
+            
+            self.logger.info("ウィンドウの終了処理が完了")
             
         except Exception as e:
             self.logger.error(f"終了処理エラー: {e}")
