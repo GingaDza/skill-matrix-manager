@@ -6,11 +6,10 @@ import os
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 20:29:54"
+        self.current_time = "2025-02-07 20:32:10"
         self.db_path = "database/skill_matrix.db"
         
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        
         self.initialize_database()
         self.logger.info("データベースの初期化が完了しました")
 
@@ -45,13 +44,11 @@ class DatabaseManager:
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
                         FOREIGN KEY (group_id) REFERENCES groups (id)
-                            ON DELETE CASCADE
+                            ON DELETE SET NULL
                     )
                 ''')
                 
-                # 初期データの挿入
                 self._insert_initial_data(cursor)
-                
                 conn.commit()
                 
         except Exception as e:
@@ -101,20 +98,6 @@ class DatabaseManager:
             self.logger.error(f"Error fetching users for group {group_id}: {e}", exc_info=True)
             return []
 
-    def get_user(self, user_id):
-        """ユーザー情報を取得"""
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT id, name, group_id FROM users WHERE id = ?",
-                    (user_id,)
-                )
-                return cursor.fetchone()
-        except Exception as e:
-            self.logger.error(f"Error fetching user {user_id}: {e}", exc_info=True)
-            return None
-
     def add_user(self, name, group_id):
         """ユーザーを追加"""
         try:
@@ -159,10 +142,8 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 
                 # ユーザーの存在確認
-                cursor.execute("SELECT id, name FROM users WHERE id = ?", (user_id,))
-                user = cursor.fetchone()
-                
-                if not user:
+                cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+                if not cursor.fetchone():
                     self.logger.warning(f"User {user_id} not found")
                     return False
                 
@@ -170,10 +151,10 @@ class DatabaseManager:
                 cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 conn.commit()
                 
-                if cursor.rowcount > 0:
+                success = cursor.rowcount > 0
+                if success:
                     self.logger.info(f"User {user_id} deleted successfully")
-                    return True
-                return False
+                return success
                     
         except Exception as e:
             self.logger.error(f"Error deleting user {user_id}: {e}", exc_info=True)

@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# 環境変数の設定
-export PYTHONPATH=".:$PYTHONPATH"
+# データベースディレクトリの確認
+if [ ! -d "data" ]; then
+    mkdir -p data
+fi
 
-# アプリケーションの実行
+# ログディレクトリの確認
+if [ ! -d "logs" ]; then
+    mkdir -p logs
+fi
+
+# Pythonスクリプトの実行
 python3 run.py
