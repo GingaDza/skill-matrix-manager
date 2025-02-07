@@ -14,7 +14,7 @@ class MemoryOptimizedHandler(QObject):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         
-        # 強参照を避けるため、弱参照を使用
+        # 弱参照の設定
         self._db = weakref.proxy(db)
         self._main_window = weakref.proxy(main_window)
         
@@ -32,44 +32,52 @@ class MemoryOptimizedHandler(QObject):
         
         # ガベージコレクションの設定
         gc.enable()
-        gc.set_threshold(100, 5, 5)  # GCの閾値を調整
+        gc.set_debug(gc.DEBUG_STATS | gc.DEBUG_LEAK)
+        gc.set_threshold(100, 5, 5)
         
         # クリーンアップタイマーの開始
         self._cleanup_timer.start(self._cleanup_interval_ms)
         
         self.logger.debug("MemoryOptimizedHandler initialized")
-        self._log_detailed_memory_info()
+        self._log_memory_stats()
 
-    def _log_detailed_memory_info(self):
-        """詳細なメモリ情報のログ出力"""
+    def _log_memory_stats(self):
+        """メモリ統計情報のログ出力"""
         try:
             process = psutil.Process(os.getpid())
-            memory_info = process.memory_info()
+            mem = process.memory_info()
             
-            self.logger.debug("=== Detailed Memory Information ===")
-            self.logger.debug(f"RSS: {memory_info.rss / (1024 * 1024):.1f}MB")
-            self.logger.debug(f"VMS: {memory_info.vms / (1024 * 1024):.1f}MB")
-            self.logger.debug(f"Shared: {memory_info.shared / (1024 * 1024):.1f}MB")
-            self.logger.debug(f"Text: {memory_info.text / (1024 * 1024):.1f}MB")
-            self.logger.debug(f"Data: {memory_info.data / (1024 * 1024):.1f}MB")
+            self.logger.debug("=== Memory Statistics ===")
+            self.logger.debug(f"RSS: {mem.rss / (1024 * 1024):.1f}MB")
+            self.logger.debug(f"VMS: {mem.vms / (1024 * 1024):.1f}MB")
             
-            # オブジェクトの統計
+            # GC統計
+            gc.collect()
+            self.logger.debug("=== GC Statistics ===")
+            for gen, count in enumerate(gc.get_count()):
+                self.logger.debug(f"Generation {gen}: {count}")
+            
+            # オブジェクト統計
             stats = objgraph.typestats()
-            top_types = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
+            top_types = sorted(
+                stats.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:5]
             
-            self.logger.debug("=== Top 10 Object Types ===")
+            self.logger.debug("=== Top 5 Object Types ===")
             for type_name, count in top_types:
                 self.logger.debug(f"{type_name}: {count}")
             
-            self.logger.debug("==============================")
+            self.logger.debug("========================")
             
         except Exception as e:
-            self.logger.error(f"メモリ情報ログエラー: {e}")
+            self.logger.error(f"メモリ統計ログエラー: {e}")
 
     def load_initial_data(self):
         """初期データの読み込み"""
         self.logger.debug("初期データ読み込み開始")
-        self._log_detailed_memory_info()
+        self._log_memory_stats()
         
         try:
             self._check_memory_usage(force=True)
@@ -102,21 +110,20 @@ class MemoryOptimizedHandler(QObject):
         """メモリ使用量のチェックとクリーンアップ"""
         try:
             process = psutil.Process()
-            memory_info = process.memory_info()
+            mem = process.memory_info()
             
-            rss_mb = memory_info.rss / (1024 * 1024)
-            vms_mb = memory_info.vms / (1024 * 1024)
+            rss_mb = mem.rss / (1024 * 1024)
+            vms_mb = mem.vms / (1024 * 1024)
             
             self.logger.debug(
                 f"Memory Usage - RSS: {rss_mb:.1f}MB, "
                 f"VMS: {vms_mb:.1f}MB"
             )
             
-            # メモリ使用量が閾値を超えているか、強制クリーンアップの場合
             if force or rss_mb > self._memory_threshold_mb or vms_mb > self._vms_threshold_mb:
                 self.logger.info("強制クリーンアップ開始")
                 self._force_cleanup()
-                self._log_detailed_memory_info()
+                self._log_memory_stats()
                 self.logger.info("強制クリーンアップ完了")
                 
         except Exception as e:
@@ -125,27 +132,34 @@ class MemoryOptimizedHandler(QObject):
     def _force_cleanup(self):
         """強制的なメモリクリーンアップ"""
         try:
-            # 不要なオブジェクトの解放
-            for _ in range(3):  # 複数回実行して確実に解放
-                gc.collect()
+            # Qt関連のクリーンアップ
+            for widget in QObject.findChildren(self._main_window, QObject):
+                if hasattr(widget, 'close'):
+                    widget.close()
             
-            # オブジェクトの追跡（デバッグ用）
+            # ガベージコレクション
+            unreachable = gc.collect(2)
+            if unreachable:
+                self.logger.warning(f"到達不能なオブジェクト: {unreachable}")
+            
+            # オブジェクトの追跡
             if self.logger.getEffectiveLevel() <= logging.DEBUG:
                 stats = objgraph.typestats()
                 current_counts = dict(sorted(
                     stats.items(),
                     key=lambda x: x[1],
                     reverse=True
-                )[:10])
+                )[:5])
                 
-                # 前回のカウントと比較
+                # 前回のカウントと比較（増加が10%以上の場合のみ警告）
                 if self._object_counts:
                     for type_name, count in current_counts.items():
                         prev_count = self._object_counts.get(type_name, 0)
-                        if count > prev_count:
+                        if count > prev_count * 1.1:  # 10%以上の増加
                             self.logger.warning(
-                                f"オブジェクト増加: {type_name} "
-                                f"({prev_count} -> {count})"
+                                f"オブジェクト増加 ({type_name}): "
+                                f"{prev_count:,d} -> {count:,d} "
+                                f"(+{((count-prev_count)/prev_count*100):.1f}%)"
                             )
                 
                 self._object_counts = current_counts
@@ -159,16 +173,17 @@ class MemoryOptimizedHandler(QObject):
         
         try:
             # タイマーの停止
-            if self._cleanup_timer.isActive():
+            if self._cleanup_timer and self._cleanup_timer.isActive():
                 self._cleanup_timer.stop()
             
             # 最終クリーンアップ
             self._force_cleanup()
-            self._log_detailed_memory_info()
+            self._log_memory_stats()
             
             # 参照のクリア
             self._db = None
             self._main_window = None
+            self._cleanup_timer.deleteLater()
             self._cleanup_timer = None
             self._object_counts.clear()
             
