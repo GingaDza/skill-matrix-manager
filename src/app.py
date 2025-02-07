@@ -4,24 +4,28 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from .views.main_window import MainWindow
 
+def setup_application_attributes():
+    """アプリケーション属性の初期設定"""
+    if sys.platform == 'darwin':
+        # macOS特有の設定をアプリケーション作成前に適用
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_PluginApplication)
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus)
+
 class App(QApplication):
     """アプリケーションのメインクラス"""
     def __init__(self, argv):
+        # アプリケーション作成前に属性を設定
+        setup_application_attributes()
+        
         super().__init__(argv)
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing App")
         
-        # macOS特有の設定
-        if sys.platform == 'darwin':
-            # Input Method対策
-            self.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
-            self.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus)
-            # プラグインアプリケーション設定
-            self.setAttribute(Qt.ApplicationAttribute.AA_PluginApplication)
-        
         # アプリケーション情報
         self.setApplicationName("スキルマトリックス管理システム")
         self.setApplicationVersion("1.0.0")
+        self.setStyle("Fusion")  # プラットフォーム共通のスタイル
         
         # メインウィンドウ
         self.main_window = None
