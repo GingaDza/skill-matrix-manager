@@ -1,5 +1,23 @@
 Skill Matrix Manager - Version History
 
+v0.2.0 (2025-02-07 11:17:49)
+Dialog Implementation
+- GroupDialog: グループの作成・編集機能
+  - 基本情報の入力
+  - バリデーション機能
+  - テスト網羅率 88%
+
+- CategoryDialog: カテゴリー管理機能
+  - 階層構造の管理
+  - 循環参照チェック
+  - テスト網羅率 79%
+
+- SkillDialog: スキル定義機能
+  - レベル別説明機能
+  - カテゴリー連携
+  - 動的フォーム更新
+  - テスト網羅率 92%
+
 v0.1.0 (2025-02-07 11:05:39)
 Initial Implementation
 - Main window UI (3:7 split)
@@ -7,28 +25,27 @@ Initial Implementation
 - System management tab
 - Group/Category management
 
-Current Development (v0.2.0) - Started: 2025-02-07 11:10:39
-Phase 1: Dialog Implementation
-1. GroupDialog (In Progress)
-   - Group creation interface
-   - Group editing functionality
-   - Group deletion confirmation
-
-2. CategoryDialog (Planned)
-   - Category tree management
-   - Category creation/editing
-   - Category relationship handling
-
-3. SkillDialog (Planned)
-   - Skill definition interface
-   - Skill level configuration
-   - Skill-category association
-
 Upcoming Versions:
-v0.3.0 - Category tab implementation
-v0.4.0 - User management
-v0.5.0 - Overall evaluation
-v1.0.0 - Final release
+v0.3.0
+- Category tab implementation
+  - Dynamic tab generation
+  - Radar chart
+  - Skill level input
 
-Last Updated: 2025-02-07 11:10:39
+v0.4.0
+- User management
+  - User CRUD
+  - Group assignment
+
+v0.5.0
+- Overall evaluation
+  - Group data aggregation
+  - Overall radar chart
+
+v1.0.0
+- Data I/O functionality
+- System information
+- Final adjustments
+
+Last Updated: 2025-02-07 11:17:49
 Maintainer: GingaDza
