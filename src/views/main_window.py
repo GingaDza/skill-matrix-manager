@@ -231,3 +231,13 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self.logger.error(f"Error deleting user: {e}")
                 QMessageBox.critical(self, "エラー", "ユーザーの削除に失敗しました")
+                    QMessageBox.warning(self, "警告", "ユーザーの削除に失敗しました")
+            except Exception as e:
+                self.logger.error(f"Error deleting user: {e}", exc_info=True)
+                QMessageBox.critical(self, "エラー", "ユーザーの削除に失敗しました")
+
+    def closeEvent(self, event):
+        """ウィンドウが閉じられる時の処理"""
+        self.logger.debug("Window closing")
+        self.window_closed.emit()
+        event.accept()
