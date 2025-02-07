@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import QMessageBox, QListWidgetItem
-from PyQt6.QtCore import QObject, Qt, QTimer, QMetaObject, QCoreApplication
+from PyQt6.QtCore import QObject, Qt, QTimer, QMetaObject, QCoreApplication, QThread
 import logging
 import traceback
 from typing import Optional, Dict, Any
-import weakref
-import sys
+import psutil
+import json
+import os
 
 class DataHandler(QObject):
     """データ操作を管理するハンドラー"""
@@ -45,13 +46,20 @@ class DataHandler(QObject):
         )
         
         # ファイルハンドラの追加
-        file_handler = logging.FileHandler('data_handler_debug.log')
+        debug_dir = 'debug_logs'
+        os.makedirs(debug_dir, exist_ok=True)
+        file_handler = logging.FileHandler(
+            os.path.join(debug_dir, 'data_handler_debug.log')
+        )
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
     def _log_debug_state(self, action: str):
         """現在の状態をログに記録"""
         self._debug_info['update_count'] += 1
+        current_memory = self._get_memory_usage()
+        self._debug_info['memory_stats'] = current_memory
+        
         self.logger.debug(
             f"Action: {action}\n"
             f"Update count: {self._debug_info['update_count']}\n"
@@ -61,12 +69,12 @@ class DataHandler(QObject):
             f"Last group ID: {self._last_group_id}\n"
             f"Last user ID: {self._last_user_id}\n"
             f"Current thread: {QThread.currentThread().objectName()}\n"
-            f"Memory usage: {self._get_memory_usage()}"
+            f"Memory RSS: {current_memory['rss'] / 1024 / 1024:.2f} MB\n"
+            f"Memory VMS: {current_memory['vms'] / 1024 / 1024:.2f} MB"
         )
 
     def _get_memory_usage(self) -> Dict[str, int]:
         """メモリ使用状況の取得"""
-        import psutil
         process = psutil.Process()
         memory_info = process.memory_info()
         return {
@@ -140,6 +148,76 @@ class DataHandler(QObject):
         finally:
             self.is_updating = False
 
+    def _update_groups(self):
+        """グループデータの更新"""
+        try:
+            groups = self.db.get_all_groups()
+            self.logger.debug(f"Fetched {len(groups)} groups")
+
+            left_pane = self._main_window.left_pane
+            current_group_id = self._last_group_id or left_pane.get_current_group_id()
+
+            left_pane.group_combo.blockSignals(True)
+            try:
+                left_pane.group_combo.clear()
+                for group_id, group_name in groups:
+                    self.logger.debug(f"Adding group: {group_id} - {group_name}")
+                    left_pane.group_combo.addItem(group_name, group_id)
+
+                if current_group_id is not None:
+                    index = left_pane.group_combo.findData(current_group_id)
+                    if index >= 0:
+                        left_pane.group_combo.setCurrentIndex(index)
+                        self._last_group_id = current_group_id
+                        self.logger.debug(f"Restored selection to group ID: {current_group_id}")
+                elif left_pane.group_combo.count() > 0:
+                    left_pane.group_combo.setCurrentIndex(0)
+                    self._last_group_id = left_pane.group_combo.currentData()
+                    self.logger.debug(f"Set initial group selection: {self._last_group_id}")
+            finally:
+                left_pane.group_combo.blockSignals(False)
+
+        except Exception as e:
+            self.logger.error(f"Error updating groups: {e}", exc_info=True)
+            raise
+
+    def _update_users(self):
+        """ユーザーリストの更新"""
+        try:
+            left_pane = self._main_window.left_pane
+            group_id = self._last_group_id or left_pane.get_current_group_id()
+
+            if group_id is None:
+                self.logger.debug("No group selected, clearing user list")
+                left_pane.user_list.clear()
+                return
+
+            self.logger.debug(f"Fetching users for group {group_id}")
+            users = self.db.get_users_by_group(group_id)
+            self.logger.debug(f"Found {len(users)} users")
+
+            current_row = left_pane.user_list.currentRow()
+            left_pane.user_list.blockSignals(True)
+            try:
+                left_pane.user_list.clear()
+                for user_id, user_name in users:
+                    self.logger.debug(f"Adding user: {user_id} - {user_name}")
+                    item = QListWidgetItem(user_name)
+                    item.setData(Qt.ItemDataRole.UserRole, user_id)
+                    left_pane.user_list.addItem(item)
+
+                # 選択状態の復元
+                if 0 <= current_row < left_pane.user_list.count():
+                    left_pane.user_list.setCurrentRow(current_row)
+            finally:
+                left_pane.user_list.blockSignals(False)
+
+            left_pane.update_button_states()
+
+        except Exception as e:
+            self.logger.error(f"Error updating users: {e}", exc_info=True)
+            raise
+
     def _capture_ui_state(self):
         """UI状態の保存"""
         try:
@@ -169,6 +247,30 @@ class DataHandler(QObject):
         except Exception as e:
             self.logger.error(f"Error restoring UI state: {e}", exc_info=True)
 
+    def _show_error(self, message: str):
+        """エラーメッセージの表示"""
+        if self._main_window:
+            try:
+                QMessageBox.critical(self._main_window, "エラー", message)
+            except Exception as e:
+                self.logger.error(f"Error showing error message: {e}", exc_info=True)
+
+    def load_initial_data(self):
+        """初期データの読み込み"""
+        self.logger.debug("Loading initial data")
+        self.schedule_update(immediate=True)
+
+    def refresh_data(self):
+        """データの更新をリクエスト"""
+        self.logger.debug("Refresh data requested")
+        self.schedule_update()
+
+    def refresh_user_list(self):
+        """ユーザーリストの更新をリクエスト"""
+        self.logger.debug("User list refresh requested")
+        if not self.is_updating:
+            self._update_users()
+
     def cleanup(self):
         """リソースのクリーンアップ"""
         self._log_debug_state("cleanup")
@@ -193,10 +295,12 @@ class DataHandler(QObject):
     def _save_debug_info(self):
         """デバッグ情報の保存"""
         try:
-            import json
-            with open('data_handler_debug.json', 'w') as f:
-                json.dump(self._debug_info, f, indent=2)
+            debug_dir = 'debug_logs'
+            os.makedirs(debug_dir, exist_ok=True)
+            debug_file = os.path.join(debug_dir, 'data_handler_debug.json')
+            
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                json.dump(self._debug_info, f, indent=2, ensure_ascii=False)
+                
         except Exception as e:
             self.logger.error(f"Error saving debug info: {e}", exc_info=True)
-
-[残りのコードは同じ...]
