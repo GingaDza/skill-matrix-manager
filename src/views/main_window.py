@@ -11,6 +11,12 @@ from PyQt6.QtWidgets import (
     QSplitter
 )
 from PyQt6.QtCore import Qt
+from .tabs.system_management.initial_settings_tab import InitialSettingsTab
+from .tabs.system_management.data_io_tab import DataIOTab
+from .tabs.system_management.system_info_tab import SystemInfoTab
+from .tabs.category.category_tab import CategoryTab
+from .tabs.evaluation.total_evaluation_tab import TotalEvaluationTab
+from ..database.database_manager import DatabaseManager  # DatabaseManagerのインポートを追加
 from ..utils.time_utils import TimeProvider
 
 class MainWindow(QMainWindow):
