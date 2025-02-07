@@ -1,60 +1,47 @@
 from PyQt6.QtCore import QObject, Qt, pyqtSlot
-from PyQt6.QtWidgets import QMessageBox, QInputDialog
+from PyQt6.QtWidgets import QMessageBox, QInputDialog, QWidget
 import logging
-import weakref
-from typing import Optional
+from typing import Optional, Any
 
 class SafeHandler:
     """安全なイベントハンドラーベース"""
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self._db_ref = None
-        self._main_window_ref = None
-        self._data_handler_ref = None
+        self._db = None
+        self._main_window = None
+        self._data_handler = None
         
-    def _initialize_refs(self, db, main_window, data_handler):
+    def _initialize_refs(self, db: Any, main_window: QWidget, data_handler: Any):
         """参照の初期化"""
-        self._db_ref = weakref.proxy(db)
-        self._main_window_ref = weakref.proxy(main_window)
-        self._data_handler_ref = weakref.proxy(data_handler)
+        self._db = db
+        self._main_window = main_window
+        self._data_handler = data_handler
         
     @property
-    def db(self):
+    def db(self) -> Any:
         """データベース参照の取得"""
-        try:
-            return self._db_ref
-        except ReferenceError:
-            self.logger.error("データベース参照が失われました")
-            return None
+        return self._db
             
     @property
-    def main_window(self):
+    def main_window(self) -> Optional[QWidget]:
         """メインウィンドウ参照の取得"""
-        try:
-            return self._main_window_ref
-        except ReferenceError:
-            self.logger.error("メインウィンドウ参照が失われました")
-            return None
+        return self._main_window
             
     @property
-    def data_handler(self):
+    def data_handler(self) -> Any:
         """データハンドラー参照の取得"""
-        try:
-            return self._data_handler_ref
-        except ReferenceError:
-            self.logger.error("データハンドラー参照が失われました")
-            return None
+        return self._data_handler
 
     def cleanup(self):
         """リソースのクリーンアップ"""
-        self._db_ref = None
-        self._main_window_ref = None
-        self._data_handler_ref = None
+        self._db = None
+        self._main_window = None
+        self._data_handler = None
 
 class EventHandler(QObject, SafeHandler):
     """イベント処理ハンドラー"""
     
-    def __init__(self, db, main_window, data_handler):
+    def __init__(self, db: Any, main_window: QWidget, data_handler: Any):
         QObject.__init__(self)
         SafeHandler.__init__(self)
         self._initialize_refs(db, main_window, data_handler)
@@ -66,24 +53,24 @@ class EventHandler(QObject, SafeHandler):
         self.logger.debug("Starting user addition")
         
         try:
-            window = self.main_window
-            if not window:
+            if not self.main_window:
+                self.logger.error("メインウィンドウが見つかりません")
                 return
                 
-            left_pane = window.left_pane
+            left_pane = self.main_window.left_pane
             group_id = left_pane.get_selected_group_id()
             
             if group_id is None:
                 self.logger.warning("No group selected for user addition")
                 QMessageBox.warning(
-                    window,
+                    self.main_window,
                     "警告",
                     "グループを選択してください。"
                 )
                 return
                 
             name, ok = QInputDialog.getText(
-                window,
+                self.main_window,
                 "ユーザー追加",
                 "ユーザー名を入力してください："
             )
@@ -98,11 +85,12 @@ class EventHandler(QObject, SafeHandler):
                     
         except Exception as e:
             self.logger.error(f"Error adding user: {e}")
-            QMessageBox.critical(
-                None,
-                "エラー",
-                "ユーザーの追加に失敗しました。"
-            )
+            if self.main_window:
+                QMessageBox.critical(
+                    self.main_window,
+                    "エラー",
+                    "ユーザーの追加に失敗しました。"
+                )
 
     @pyqtSlot()
     def on_remove_user(self):
@@ -110,24 +98,24 @@ class EventHandler(QObject, SafeHandler):
         self.logger.debug("Starting user removal")
         
         try:
-            window = self.main_window
-            if not window:
+            if not self.main_window:
+                self.logger.error("メインウィンドウが見つかりません")
                 return
                 
-            left_pane = window.left_pane
+            left_pane = self.main_window.left_pane
             user_id = left_pane.get_selected_user_id()
             
             if user_id is None:
                 self.logger.warning("No user selected for removal")
                 QMessageBox.warning(
-                    window,
+                    self.main_window,
                     "警告",
                     "ユーザーを選択してください。"
                 )
                 return
                 
             confirm = QMessageBox.question(
-                window,
+                self.main_window,
                 "確認",
                 "選択したユーザーを削除しますか？",
                 QMessageBox.StandardButton.Yes | 
@@ -144,11 +132,12 @@ class EventHandler(QObject, SafeHandler):
                     
         except Exception as e:
             self.logger.error(f"Error removing user: {e}")
-            QMessageBox.critical(
-                None,
-                "エラー",
-                "ユーザーの削除に失敗しました。"
-            )
+            if self.main_window:
+                QMessageBox.critical(
+                    self.main_window,
+                    "エラー",
+                    "ユーザーの削除に失敗しました。"
+                )
 
     @pyqtSlot()
     def on_add_group(self):
@@ -156,12 +145,12 @@ class EventHandler(QObject, SafeHandler):
         self.logger.debug("Starting group addition")
         
         try:
-            window = self.main_window
-            if not window:
+            if not self.main_window:
+                self.logger.error("メインウィンドウが見つかりません")
                 return
                 
             name, ok = QInputDialog.getText(
-                window,
+                self.main_window,
                 "グループ追加",
                 "グループ名を入力してください："
             )
@@ -176,11 +165,12 @@ class EventHandler(QObject, SafeHandler):
                     
         except Exception as e:
             self.logger.error(f"Error adding group: {e}")
-            QMessageBox.critical(
-                None,
-                "エラー",
-                "グループの追加に失敗しました。"
-            )
+            if self.main_window:
+                QMessageBox.critical(
+                    self.main_window,
+                    "エラー",
+                    "グループの追加に失敗しました。"
+                )
 
     @pyqtSlot()
     def on_remove_group(self):
@@ -188,24 +178,24 @@ class EventHandler(QObject, SafeHandler):
         self.logger.debug("Starting group removal")
         
         try:
-            window = self.main_window
-            if not window:
+            if not self.main_window:
+                self.logger.error("メインウィンドウが見つかりません")
                 return
                 
-            left_pane = window.left_pane
+            left_pane = self.main_window.left_pane
             group_id = left_pane.get_selected_group_id()
             
             if group_id is None:
                 self.logger.warning("No group selected for removal")
                 QMessageBox.warning(
-                    window,
+                    self.main_window,
                     "警告",
                     "グループを選択してください。"
                 )
                 return
                 
             confirm = QMessageBox.question(
-                window,
+                self.main_window,
                 "確認",
                 "選択したグループを削除しますか？\n"
                 "※所属するユーザーも全て削除されます。",
@@ -223,11 +213,12 @@ class EventHandler(QObject, SafeHandler):
                     
         except Exception as e:
             self.logger.error(f"Error removing group: {e}")
-            QMessageBox.critical(
-                None,
-                "エラー",
-                "グループの削除に失敗しました。"
-            )
+            if self.main_window:
+                QMessageBox.critical(
+                    self.main_window,
+                    "エラー",
+                    "グループの削除に失敗しました。"
+                )
 
     @pyqtSlot(int)
     def on_group_changed(self, index: int):
@@ -235,17 +226,14 @@ class EventHandler(QObject, SafeHandler):
         self.logger.debug(f"Group selection changed to index {index}")
         
         try:
-            window = self.main_window
-            if not window:
-                return
-                
             if self.data_handler:
                 self.data_handler.refresh_user_list()
                 
         except Exception as e:
             self.logger.error(f"Error handling group change: {e}")
-            QMessageBox.critical(
-                None,
-                "エラー",
-                "グループ変更の処理に失敗しました。"
-            )
+            if self.main_window:
+                QMessageBox.critical(
+                    self.main_window,
+                    "エラー",
+                    "グループ変更の処理に失敗しました。"
+                )
