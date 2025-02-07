@@ -1,0 +1,34 @@
+Skill Matrix Manager - 復帰手順
+
+1. 環境設定
+# 仮想環境の作成と有効化
+python -m venv venv
+source venv/bin/activate  # Unix系
+# または
+.\venv\Scripts\activate  # Windows
+
+# 依存パッケージのインストール
+pip install -r requirements.txt
+
+2. バージョン切り替え
+# 特定のバージョンに切り替え
+git checkout v0.1.0  # 初期実装
+git checkout v0.2.0  # ダイアログ実装
+git checkout v0.3.0  # カテゴリータブ実装
+
+3. データベースのリセット
+# データベースファイルを削除
+rm data/skill_matrix.db
+
+# アプリケーションを起動（データベースが自動作成される）
+./run.sh
+
+4. トラブルシューティング
+- データベースエラー: data/skill_matrix.dbを削除して再起動
+- インポートエラー: PYTHONPATHの設定を確認
+- UI表示エラー: PyQt6の再インストールを試行
+
+開発環境:
+- Python 3.8+
+- PyQt6
+- SQLite3
