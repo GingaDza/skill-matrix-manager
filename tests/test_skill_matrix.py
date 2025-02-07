@@ -1,5 +1,4 @@
 import sys
-import os
 import pytest
 from PyQt6.QtWidgets import QApplication
 from src.views.main_window import MainWindow
@@ -22,4 +21,4 @@ def main_window(app):
 
 def test_window_title(main_window):
     """ウィンドウタイトルのテスト"""
-    assert "Skill Matrix Manager" in main_window.windowTitle()
+    assert "スキルマトリックス管理システム" == main_window.windowTitle()
