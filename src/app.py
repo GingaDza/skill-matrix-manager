@@ -1,12 +1,20 @@
 from PyQt6.QtWidgets import QApplication
 from .views.main_window import MainWindow
+import logging
 
-class App(QApplication):
+class App(MainWindow):
     def __init__(self):
-        super().__init__([])
-        self.main_window = MainWindow()
-        self.main_window.show()
+        # ロギングの設定
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        self.logger = logging.getLogger(__name__)
+        
+        # メインウィンドウの初期化
+        super().__init__()
+        self.logger.info("アプリケーションを起動しました")
 
-    def exec(self):
-        """アプリケーションの実行"""
-        return super().exec()
+    def closeEvent(self, event):
+        self.logger.info("アプリケーションを終了します")
+        event.accept()
