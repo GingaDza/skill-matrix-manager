@@ -3,3 +3,6 @@ PyQt6-Charts>=6.4.0
 pytest>=7.0.0
 pytest-qt>=4.2.0
 pytest-cov>=4.0.0
+pandas>=2.0.0
+openpyxl>=3.0.0
+reportlab>=4.0.0

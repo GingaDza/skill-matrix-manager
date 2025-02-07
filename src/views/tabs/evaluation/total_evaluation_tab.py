@@ -8,7 +8,13 @@ from PyQt6.QtWidgets import (
     QScrollArea
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtChart import QChart, QChartView, QPolarChart
+
+# チャートモジュールの条件付きインポート
+try:
+    from PyQt6.QtCharts import QChart, QChartView, QPolarChart
+    CHARTS_AVAILABLE = True
+except ImportError:
+    CHARTS_AVAILABLE = False
 
 class TotalEvaluationTab(QWidget):
     """総合評価タブ"""
@@ -60,11 +66,27 @@ class TotalEvaluationTab(QWidget):
         scroll_area.setWidget(scroll_widget)
         layout.addWidget(scroll_area)
 
-        # レーダーチャートの初期化
-        self.initialize_charts()
+        if CHARTS_AVAILABLE:
+            self.initialize_charts()
+        else:
+            self.show_chart_error()
+
+    def show_chart_error(self):
+        """チャートが利用できない場合のエラーメッセージを表示"""
+        error_label = QLabel(
+            "チャート機能を使用するには PyQt6-Charts パッケージが必要です。\n"
+            "インストールするには: pip install PyQt6-Charts"
+        )
+        error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        error_label.setStyleSheet("color: red;")
+        self.chart_layout.addWidget(error_label)
 
     def initialize_charts(self):
         """レーダーチャートの初期化"""
+        if not CHARTS_AVAILABLE:
+            self.show_chart_error()
+            return
+
         try:
             # メインチャート（全カテゴリー）
             main_chart = QPolarChart()
@@ -89,6 +111,9 @@ class TotalEvaluationTab(QWidget):
 
     def update_chart(self):
         """チャートの更新"""
+        if not CHARTS_AVAILABLE:
+            return
+
         try:
             group_id = self.group_combo.currentData()
             view_mode = self.view_combo.currentText()
