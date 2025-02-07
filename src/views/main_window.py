@@ -13,7 +13,7 @@ from .tabs.evaluation.total_evaluation_tab import TotalEvaluationTab
 import logging
 
 class MainWindow(QMainWindow):
-    window_closed = pyqtSignal()  # ウィンドウクローズシグナル
+    window_closed = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -34,6 +34,14 @@ class MainWindow(QMainWindow):
             self.logger.debug("Setting up UI components")
             self.setWindowTitle("スキルマトリックス管理システム")
             self.setGeometry(100, 100, 1400, 800)
+            
+            # ウィンドウフラグの設定
+            self.setWindowFlags(
+                Qt.WindowType.Window |
+                Qt.WindowType.CustomizeWindowHint |
+                Qt.WindowType.WindowCloseButtonHint |
+                Qt.WindowType.WindowMinMaxButtonsHint
+            )
 
             # メインウィジェット
             main_widget = QWidget()
@@ -57,113 +65,6 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Error in setup_ui: {e}", exc_info=True)
             raise
-
-    def _create_left_pane(self):
-        """左ペインの作成"""
-        try:
-            self.logger.debug("Creating left pane components")
-            widget = QWidget()
-            layout = QVBoxLayout(widget)
-
-            # グループ選択
-            group_widget = QWidget()
-            group_layout = QVBoxLayout(group_widget)
-            group_layout.addWidget(QLabel("グループ選択"))
-            self.group_combo = QComboBox()
-            self.group_combo.currentIndexChanged.connect(self.on_group_changed)
-            group_layout.addWidget(self.group_combo)
-            layout.addWidget(group_widget)
-
-            # ユーザーリスト
-            user_widget = QWidget()
-            user_layout = QVBoxLayout(user_widget)
-            user_layout.addWidget(QLabel("ユーザーリスト"))
-            self.user_list = QListWidget()
-            self.user_list.itemSelectionChanged.connect(self.on_user_selected)
-            user_layout.addWidget(self.user_list)
-            layout.addWidget(user_widget)
-
-            # ユーザー操作ボタン
-            button_widget = self._create_user_buttons()
-            layout.addWidget(button_widget)
-
-            return widget
-            
-        except Exception as e:
-            self.logger.error(f"Error in _create_left_pane: {e}", exc_info=True)
-            raise
-
-    def _create_user_buttons(self):
-        """ユーザー操作ボタンの作成"""
-        try:
-            button_widget = QWidget()
-            button_layout = QVBoxLayout(button_widget)
-            
-            self.add_user_btn = QPushButton("ユーザー追加")
-            self.edit_user_btn = QPushButton("ユーザー編集")
-            self.delete_user_btn = QPushButton("ユーザー削除")
-
-            self.add_user_btn.clicked.connect(self.add_user)
-            self.edit_user_btn.clicked.connect(self.edit_user)
-            self.delete_user_btn.clicked.connect(self.delete_user)
-
-            button_layout.addWidget(self.add_user_btn)
-            button_layout.addWidget(self.edit_user_btn)
-            button_layout.addWidget(self.delete_user_btn)
-
-            return button_widget
-            
-        except Exception as e:
-            self.logger.error(f"Error in _create_user_buttons: {e}", exc_info=True)
-            raise
-
-    def _create_right_pane(self):
-        """右ペインの作成（タブウィジェット）"""
-        try:
-            self.logger.debug("Creating right pane with tabs")
-            tab_widget = QTabWidget()
-            tab_widget.setTabPosition(QTabWidget.TabPosition.North)
-            tab_widget.setMovable(True)
-
-            # システム管理タブ（デフォルト）
-            self.logger.debug("Creating system management tab")
-            self.system_tab = SystemManagementTab(self)
-            tab_widget.addTab(self.system_tab, "システム管理")
-
-            # 総合評価タブ
-            self.logger.debug("Creating evaluation tab")
-            self.evaluation_tab = TotalEvaluationTab(self)
-            tab_widget.addTab(self.evaluation_tab, "総合評価")
-
-            return tab_widget
-            
-        except Exception as e:
-            self.logger.error(f"Error in _create_right_pane: {e}", exc_info=True)
-            raise
-
-    def load_data(self):
-        """データの読み込み"""
-        try:
-            self.logger.debug("Loading group data")
-            self.group_combo.clear()
-            groups = self.db.get_all_groups()
-            
-            for group in groups:
-                self.group_combo.addItem(group[1], group[0])
-                
-        except Exception as e:
-            self.logger.error(f"Error in load_data: {e}", exc_info=True)
-            raise
-
-    def closeEvent(self, event):
-        """アプリケーション終了時の処理"""
-        try:
-            self.logger.info("Application closing")
-            self.window_closed.emit()
-            event.accept()
-        except Exception as e:
-            self.logger.error(f"Error during closeEvent: {e}", exc_info=True)
-            event.accept()
 
     # ... [その他のメソッドは同じ] ...
 
