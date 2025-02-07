@@ -16,7 +16,7 @@ class DatabaseManager:
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
         self.current_user = "GingaDza"
-        self.current_time = "2025-02-07 12:37:59"
+        self.current_time = "2025-02-07 12:39:04"  # 時刻を更新
         self.initialize_database()
 
     def initialize_database(self):
@@ -111,7 +111,127 @@ class DatabaseManager:
             self.logger.error(f"初期データの挿入中にエラーが発生: {e}")
             raise
 
-    # ... 他のメソッドは変更なし ...
+    def get_all_groups(self):
+        """全グループを取得"""
+        try:
+            self.cursor.execute('SELECT id, name FROM groups ORDER BY name')
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.logger.error(f"グループ取得中にエラーが発生: {e}")
+            return []
+
+    def get_group(self, group_id):
+        """グループ情報を取得"""
+        try:
+            self.cursor.execute('SELECT id, name FROM groups WHERE id = ?', (group_id,))
+            return self.cursor.fetchone()
+        except Exception as e:
+            self.logger.error(f"グループ取得中にエラーが発生: {e}")
+            return None
+
+    def get_users_by_group(self, group_id):
+        """指定されたグループのユーザーを取得"""
+        try:
+            self.cursor.execute(
+                'SELECT id, name FROM users WHERE group_id = ? ORDER BY name',
+                (group_id,)
+            )
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.logger.error(f"ユーザー取得中にエラーが発生: {e}")
+            return []
+
+    def get_all_categories_with_skills(self):
+        """全カテゴリーとスキルを取得"""
+        try:
+            # 親カテゴリーの取得
+            self.cursor.execute('''
+                SELECT id, name FROM categories 
+                WHERE is_skill = 0 
+                ORDER BY name
+            ''')
+            parent_categories = self.cursor.fetchall()
+
+            result = []
+            for parent in parent_categories:
+                # 子カテゴリー（スキル）の取得
+                self.cursor.execute('''
+                    SELECT id, name FROM categories 
+                    WHERE parent_id = ? AND is_skill = 1
+                    ORDER BY name
+                ''', (parent[0],))
+                skills = self.cursor.fetchall()
+                
+                result.append({
+                    'category': parent,
+                    'skills': skills
+                })
+            return result
+        except Exception as e:
+            self.logger.error(f"カテゴリー取得中にエラーが発生: {e}")
+            return []
+
+    def add_group(self, name):
+        """グループを追加"""
+        try:
+            self.cursor.execute(
+                'INSERT INTO groups (name, created_at, created_by) VALUES (?, ?, ?)',
+                (name, self.current_time, self.current_user)
+            )
+            self.conn.commit()
+            return self.cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"グループ追加中にエラーが発生: {e}")
+            return None
+
+    def add_user(self, name, group_id):
+        """ユーザーを追加"""
+        try:
+            self.cursor.execute(
+                'INSERT INTO users (name, group_id, created_at, created_by) VALUES (?, ?, ?, ?)',
+                (name, group_id, self.current_time, self.current_user)
+            )
+            self.conn.commit()
+            return self.cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"ユーザー追加中にエラーが発生: {e}")
+            return None
+
+    def add_category(self, name, parent_id=None, is_skill=False):
+        """カテゴリーを追加"""
+        try:
+            self.cursor.execute(
+                'INSERT INTO categories (name, parent_id, is_skill, created_at, created_by) VALUES (?, ?, ?, ?, ?)',
+                (name, parent_id, is_skill, self.current_time, self.current_user)
+            )
+            self.conn.commit()
+            return self.cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"カテゴリー追加中にエラーが発生: {e}")
+            return None
+
+    def edit_group(self, group_id, name):
+        """グループを編集"""
+        try:
+            self.cursor.execute(
+                'UPDATE groups SET name = ? WHERE id = ?',
+                (name, group_id)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.logger.error(f"グループ編集中にエラーが発生: {e}")
+            return False
+
+    def delete_group(self, group_id):
+        """グループを削除"""
+        try:
+            self.cursor.execute('DELETE FROM groups WHERE id = ?', (group_id,))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.logger.error(f"グループ削除中にエラーが発生: {e}")
+            return False
 
     def __del__(self):
         """デストラクタ：接続のクローズ"""
