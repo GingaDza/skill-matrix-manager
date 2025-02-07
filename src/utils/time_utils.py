@@ -1,21 +1,23 @@
 from datetime import datetime
 
 class TimeProvider:
-    """時間とユーザー情報の管理クラス"""
+    """時間とユーザー情報の固定プロバイダー"""
     
-    _current_user = None
+    # 固定値の設定
+    FIXED_TIME = datetime(2025, 2, 7, 12, 11, 26)  # UTC
+    FIXED_USER = "GingaDza"
 
     @staticmethod
     def get_current_time():
-        """現在時刻を取得"""
-        return datetime.utcnow()
+        """固定の現在時刻を取得"""
+        return TimeProvider.FIXED_TIME
+
+    @staticmethod
+    def get_formatted_time():
+        """フォーマット済みの時刻文字列を取得"""
+        return TimeProvider.FIXED_TIME.strftime("%Y-%m-%d %H:%M:%S")
 
     @staticmethod
     def get_current_user():
-        """現在のユーザーを取得"""
-        return TimeProvider._current_user or "GingaDza"
-
-    @staticmethod
-    def set_current_user(username):
-        """現在のユーザーを設定"""
-        TimeProvider._current_user = username
+        """固定のユーザー名を取得"""
+        return TimeProvider.FIXED_USER
