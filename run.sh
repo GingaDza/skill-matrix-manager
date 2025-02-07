@@ -1,3 +1,7 @@
 #!/bin/bash
-export PYTHONPATH=$PYTHONPATH:$(pwd)
-python src/run.py
+
+# 環境変数の設定
+export PYTHONPATH=".:$PYTHONPATH"
+
+# アプリケーションの実行
+python3 run.py

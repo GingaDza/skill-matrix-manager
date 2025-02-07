@@ -1,14 +1,16 @@
+#!/usr/bin/env python3
 import sys
-import os
-
-# 正しいパスを追加
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
-
-from views.main_window import MainWindow
 from PyQt6.QtWidgets import QApplication
+from src.views.main_window import MainWindow
+from src.database.database_manager import DatabaseManager
 
 def main():
+    """アプリケーションのメインエントリーポイント"""
+    # データベースの初期化
+    db_manager = DatabaseManager()
+    db_manager.initialize_database()
+
+    # アプリケーションの起動
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
