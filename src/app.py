@@ -1,14 +1,12 @@
 """アプリケーションメインモジュール"""
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt, QtMsgType
-from .utils.memory_profiler import MemoryProfiler
-from .utils.type_manager import TypeManager
-from .utils.log_config import memory_logger
-import logging
 import sys
-import psutil
+import logging
 import gc
 from typing import Optional
+
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
+
 from .views.main_window import MainWindow
 from .database.database_manager import DatabaseManager
 
@@ -18,62 +16,30 @@ class SkillMatrixApp(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
         
-        # ロガーの設定
         self.logger = logging.getLogger(__name__)
-        self.logger.debug("Starting App initialization")
+        self.logger.info("アプリケーションを初期化中...")
         
-        # デバッグモードの設定
-        memory_logger.set_debug_mode(False)  # 通常モードではFalse
-        
-        # メモリプロファイラーの初期化
-        self._profiler = MemoryProfiler()
-        self._profiler.take_snapshot()
-        
-        # 型管理システムの初期化
-        self._type_manager = TypeManager()
-        self.logger.debug("Type manager initialized")
-        
-        # macOS固有の設定
-        self._configure_macos()
-        self.logger.debug("App parent initialization complete")
-        
-        # アプリケーション設定
-        self._configure_application()
-        self.logger.debug("Application configuration complete")
-        
-        # メインウィンドウの初期化
-        self.logger.debug("Starting application main window")
-        self._init_main_window()
-
-    def _configure_macos(self):
-        """macOS固有の設定"""
         try:
-            if sys.platform == 'darwin':
-                self.logger.debug("Configuring macOS specific settings")
-                self.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
-                self.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
-                self.setAttribute(Qt.ApplicationAttribute.AA_DisableWindowContextHelpButton)
+            self._configure_application()
+            self._init_main_window()
+            
         except Exception as e:
-            self.logger.error(f"macOS設定エラー: {e}")
+            self.logger.exception("初期化エラー")
+            raise
 
     def _configure_application(self):
         """アプリケーションの設定"""
-        try:
-            # アプリケーション全体の設定
-            self.setQuitOnLastWindowClosed(True)
-            self.setStyle('Fusion')
-            
-            # イベントフィルターのインストール
-            self.installEventFilter(self)
-            
-            # GCの設定
-            gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
-            gc.set_threshold(700, 10, 5)
-            
-            self.logger.debug("Application configuration complete")
-            
-        except Exception as e:
-            self.logger.error(f"アプリケーション設定エラー: {e}")
+        # プラットフォーム固有の設定
+        if sys.platform == 'darwin':
+            self.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
+            self.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
+        
+        # 一般的な設定
+        self.setStyle('Fusion')
+        self.setQuitOnLastWindowClosed(True)
+        
+        # GC設定
+        gc.set_threshold(700, 10, 5)
 
     def _init_main_window(self):
         """メインウィンドウの初期化"""
@@ -83,79 +49,41 @@ class SkillMatrixApp(QApplication):
             self._main_window.show()
             
         except Exception as e:
-            self.logger.error(f"メインウィンドウ初期化エラー: {e}")
+            self.logger.exception("メインウィンドウの初期化に失敗")
             raise
 
-    def notify(self, receiver, event) -> bool:
-        """イベント通知のオーバーライド"""
+    def exec(self) -> int:
+        """アプリケーションの実行"""
         try:
-            return super().notify(receiver, event)
+            return super().exec()
         except Exception as e:
-            self.logger.error(f"イベント通知エラー: {e}")
-            return False
+            self.logger.exception("実行時エラー")
+            return 1
+        finally:
+            self._cleanup()
 
-    def event(self, event) -> bool:
-        """イベントフィルター"""
+    def _cleanup(self):
+        """クリーンアップ処理"""
         try:
-            # メモリ使用量の監視
-            if event.type() == Qt.ApplicationAttribute.AA_EnableHighDpiScaling:
-                stats = self._profiler.analyze_memory_usage()
-                if stats.get('warning') or stats.get('error'):
-                    gc.collect()
+            if hasattr(self, '_main_window'):
+                self._main_window.close()
+                self._main_window.deleteLater()
             
-            return super().event(event)
+            if hasattr(self, '_db'):
+                self._db = None
             
-        except Exception as e:
-            self.logger.error(f"イベントフィルターエラー: {e}")
-            return False
-
-    def handle_message(self, msg_type: QtMsgType, msg: str):
-        """メッセージハンドリング"""
-        try:
-            if msg_type == QtMsgType.QtDebugMsg:
-                self.logger.debug(msg)
-            elif msg_type == QtMsgType.QtInfoMsg:
-                self.logger.info(msg)
-            elif msg_type == QtMsgType.QtWarningMsg:
-                self.logger.warning(msg)
-            elif msg_type == QtMsgType.QtCriticalMsg:
-                self.logger.error(msg)
-            elif msg_type == QtMsgType.QtFatalMsg:
-                self.logger.critical(msg)
-                
-        except Exception as e:
-            self.logger.error(f"メッセージハンドリングエラー: {e}")
-
-    def cleanup(self):
-        """アプリケーションのクリーンアップ"""
-        try:
-            # メモリリークの検出
-            leaks = self._profiler.find_memory_leaks()
-            if leaks:
-                self.logger.warning("メモリリーク検出:")
-                for leak in leaks:
-                    self.logger.warning(f"  {leak}")
-            
-            # 型管理システムのクリーンアップ
-            self._type_manager.cleanup()
-            self.logger.debug("Type manager cleaned up")
-            
-            # プロファイラーのクリーンアップ
-            self._profiler.cleanup()
-            
-            # 最終的なガベージコレクション
             gc.collect()
             
         except Exception as e:
-            self.logger.error(f"クリーンアップエラー: {e}")
+            self.logger.exception("クリーンアップエラー")
 
 def App(argv=None) -> Optional[SkillMatrixApp]:
-    """アプリケーションインスタンスの取得"""
+    """アプリケーションインスタンスの生成"""
     if argv is None:
         argv = sys.argv
-        
+    
     try:
         return SkillMatrixApp(argv)
     except Exception as e:
-        logging.error(f"アプリケーション初期化エラー: {e}")
+        logging.exception("アプリケーション作成エラー")
         return None
