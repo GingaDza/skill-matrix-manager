@@ -21,7 +21,7 @@ class DatabaseManager:
             self.logger.info("古いデータベースファイルを削除しました")
         
         # 時刻の設定
-        self.current_time = "2025-02-07 23:00:30"
+        self.current_time = "2025-02-07 23:04:52"
         
         # データベースの初期化
         self._initialize_db()
@@ -233,3 +233,13 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"ユーザー一覧取得エラー: {e}")
             raise
+
+    def reset_connections(self):
+        """データベース接続のリセット"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA shrink_memory")
+                conn.commit()
+        except Exception as e:
+            self.logger.error(f"接続リセットエラー: {e}")
