@@ -1,74 +1,95 @@
-[前のコードと同じ内容...]
+from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QCoreApplication
+import logging
+import sys
+import traceback
+from .components.left_pane import LeftPane
+from .components.right_pane import RightPane
+from .handlers.data_handler import DataHandler
+from .handlers.event_handler import EventHandler
+from ..database.database_manager import DatabaseManager
 
-    def _refresh_data(self):
-        """データの更新"""
-        self.logger.debug("Starting data refresh")
-        if self.is_updating:
-            self.logger.debug("Update already in progress, skipping")
-            return
-            
-        try:
-            self.is_updating = True
-            # グループデータの更新
-            groups = self.db.get_all_groups()
-            self.logger.debug(f"Fetched {len(groups)} groups")
-            
-            current_index = self.group_combo.currentIndex()
-            current_group_id = self.group_combo.itemData(current_index) if current_index >= 0 else None
-            
-            self.logger.debug(f"Current group ID: {current_group_id}")
-            
-            self.group_combo.clear()
-            for group_id, group_name in groups:
-                self.logger.debug(f"Adding group: {group_id} - {group_name}")
-                self.group_combo.addItem(group_name, group_id)
-                
-            # 現在のグループを再選択
-            if current_group_id is not None:
-                index = self.group_combo.findData(current_group_id)
-                if index >= 0:
-                    self.group_combo.setCurrentIndex(index)
-                    self.logger.debug(f"Restored selection to group ID: {current_group_id}")
-            elif self.group_combo.count() > 0:
-                self.group_combo.setCurrentIndex(0)
-                self.current_group_id = self.group_combo.itemData(0)
-                self.logger.debug(f"Set initial group selection to ID: {self.current_group_id}")
-                
-            # ユーザーリストの更新
-            self._refresh_user_list()
-            
-            self.logger.debug("Data refresh completed successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Error refreshing data: {e}\n{traceback.format_exc()}")
-            QMessageBox.critical(self, "エラー", "データの更新に失敗しました")
-        finally:
-            self.is_updating = False
+class MainWindow(QMainWindow):
+    """メインウィンドウクラス"""
+    window_closed = pyqtSignal()
+    user_deleted = pyqtSignal(int)
+    data_changed = pyqtSignal()
 
-    def _refresh_user_list(self):
-        """ユーザーリストの更新"""
-        self.logger.debug("Starting user list refresh")
-        try:
-            group_id = self.current_group_id
-            if group_id is None:
-                self.logger.debug("No group selected, clearing user list")
-                self.user_list.clear()
-                return
-                
-            self.logger.debug(f"Fetching users for group {group_id}")
-            users = self.db.get_users_by_group(group_id)
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.debug("Starting MainWindow initialization")
+        
+        if not QCoreApplication.instance():
+            self.logger.critical("QApplication not created before MainWindow")
+            raise RuntimeError("QApplication must be created before MainWindow")
             
-            self.user_list.clear()
-            for user_id, user_name in users:
-                self.logger.debug(f"Adding user: {user_id} - {user_name}")
-                item = QListWidgetItem(user_name)
-                item.setData(Qt.ItemDataRole.UserRole, user_id)
-                self.user_list.addItem(item)
-                
-            self.logger.debug(f"Added {len(users)} users to the list")
-                
+        super().__init__()
+        
+        # クラッシュ時のスタックトレース出力を設定
+        sys.excepthook = self._exception_hook
+        
+        self._initialize_components()
+        self._setup_ui()
+        self._connect_signals()
+        
+        # 初期データ読み込み
+        QTimer.singleShot(100, self.data_handler.load_initial_data)
+
+    def _initialize_components(self):
+        """コンポーネントの初期化"""
+        self.logger.debug("Initializing components")
+        try:
+            self.db = DatabaseManager()
+            self.data_handler = DataHandler(self.db, self)
+            self.event_handler = EventHandler(self.db, self)
+            self.left_pane = LeftPane(self)
+            self.right_pane = RightPane(self)
         except Exception as e:
-            self.logger.error(f"Error refreshing user list: {e}\n{traceback.format_exc()}")
+            self.logger.critical(f"Failed to initialize components: {e}\n{traceback.format_exc()}")
             raise
 
-[残りのコードは同じ...]
+    def _setup_ui(self):
+        """UIのセットアップ"""
+        self.logger.debug("Setting up UI")
+        try:
+            self.setWindowTitle("スキルマトリックス管理システム")
+            self.setMinimumSize(800, 600)
+            
+            central_widget = QWidget()
+            self.setCentralWidget(central_widget)
+            
+            layout = QHBoxLayout(central_widget)
+            layout.addWidget(self.left_pane, stretch=1)
+            layout.addWidget(self.right_pane, stretch=2)
+        except Exception as e:
+            self.logger.critical(f"Failed to setup UI: {e}\n{traceback.format_exc()}")
+            raise
+
+    def _connect_signals(self):
+        """シグナルの接続"""
+        self.logger.debug("Connecting signals")
+        try:
+            self.left_pane.group_changed.connect(self.event_handler.on_group_changed)
+            self.left_pane.add_user_clicked.connect(self.event_handler.add_user)
+            self.left_pane.edit_user_clicked.connect(self.event_handler.edit_user)
+            self.left_pane.delete_user_clicked.connect(self.event_handler.delete_user)
+            self.data_changed.connect(self.data_handler.refresh_data)
+        except Exception as e:
+            self.logger.error(f"Failed to connect signals: {e}\n{traceback.format_exc()}")
+
+    def _exception_hook(self, exc_type, exc_value, exc_traceback):
+        """未捕捉の例外をログに記録"""
+        self.logger.critical("Uncaught exception:",
+                           exc_info=(exc_type, exc_value, exc_traceback))
+
+    def closeEvent(self, event):
+        """ウィンドウを閉じる際の処理"""
+        self.logger.debug("Processing window close event")
+        try:
+            self.window_closed.emit()
+            self.logger.debug("Window closed signal emitted")
+        except Exception as e:
+            self.logger.error(f"Error in close event: {e}\n{traceback.format_exc()}")
+        finally:
+            event.accept()
