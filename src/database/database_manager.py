@@ -6,10 +6,9 @@ import os
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 14:51:14"
+        self.current_time = "2025-02-07 15:00:37"
         self.db_path = "database/skill_matrix.db"
         
-        # データベースディレクトリの作成
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
         self.initialize_database()
@@ -17,7 +16,9 @@ class DatabaseManager:
 
     def get_connection(self):
         """データベース接続を取得"""
-        return sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
 
     def initialize_database(self):
         """データベースの初期化"""
@@ -48,9 +49,6 @@ class DatabaseManager:
                     )
                 ''')
                 
-                # 外部キー制約を有効化
-                cursor.execute("PRAGMA foreign_keys = ON")
-                
                 # 初期データの挿入
                 self._insert_initial_data(cursor)
                 
@@ -63,10 +61,8 @@ class DatabaseManager:
     def _insert_initial_data(self, cursor):
         """初期データの挿入"""
         try:
-            # 既存のグループをチェック
             cursor.execute("SELECT COUNT(*) FROM groups")
             if cursor.fetchone()[0] == 0:
-                # グループの追加
                 groups = [
                     ("開発部", self.current_time, self.current_time),
                     ("営業部", self.current_time, self.current_time),
@@ -85,7 +81,6 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute("SELECT id, name FROM groups ORDER BY id")
                 return cursor.fetchall()
         except Exception as e:
@@ -97,7 +92,6 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute(
                     "SELECT id, name FROM users WHERE group_id = ? ORDER BY id",
                     (group_id,)
@@ -107,12 +101,25 @@ class DatabaseManager:
             self.logger.error(f"Error fetching users for group {group_id}: {e}", exc_info=True)
             return []
 
+    def get_user(self, user_id):
+        """ユーザー情報を取得"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id, name, group_id FROM users WHERE id = ?",
+                    (user_id,)
+                )
+                return cursor.fetchone()
+        except Exception as e:
+            self.logger.error(f"Error fetching user {user_id}: {e}", exc_info=True)
+            return None
+
     def add_user(self, name, group_id):
         """ユーザーを追加"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute(
                     """
                     INSERT INTO users (name, group_id, created_at, updated_at)
@@ -131,7 +138,6 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")
                 cursor.execute(
                     """
                     UPDATE users
@@ -151,11 +157,12 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")
                 
-                # ユーザーが存在するか確認
-                cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
-                if not cursor.fetchone():
+                # ユーザーの存在確認
+                cursor.execute("SELECT id, name FROM users WHERE id = ?", (user_id,))
+                user = cursor.fetchone()
+                
+                if not user:
                     self.logger.warning(f"User {user_id} not found")
                     return False
                 
@@ -163,26 +170,11 @@ class DatabaseManager:
                 cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 conn.commit()
                 
-                deleted = cursor.rowcount > 0
-                if deleted:
+                if cursor.rowcount > 0:
                     self.logger.info(f"User {user_id} deleted successfully")
-                return deleted
-                
+                    return True
+                return False
+                    
         except Exception as e:
             self.logger.error(f"Error deleting user {user_id}: {e}", exc_info=True)
             raise
-
-    def get_user(self, user_id):
-        """ユーザー情報を取得"""
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")
-                cursor.execute(
-                    "SELECT id, name, group_id FROM users WHERE id = ?",
-                    (user_id,)
-                )
-                return cursor.fetchone()
-        except Exception as e:
-            self.logger.error(f"Error fetching user {user_id}: {e}", exc_info=True)
-            return None
