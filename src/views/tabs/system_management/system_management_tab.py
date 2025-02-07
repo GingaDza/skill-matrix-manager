@@ -1,8 +1,12 @@
-from PyQt6.QtWidgets import QTabWidget, QPushButton, QVBoxLayout, QWidget, QMessageBox
+from PyQt6.QtWidgets import (
+    QTabWidget, QPushButton, QVBoxLayout, QWidget, 
+    QMessageBox, QListWidget, QLabel, QHBoxLayout
+)
+from PyQt6.QtCore import Qt
 from .group_manager import GroupManager
 import logging
 
-class SystemManagementTab(QTabWidget):
+class SystemManagementTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
@@ -12,13 +16,12 @@ class SystemManagementTab(QTabWidget):
 
     def setup_ui(self):
         """UIの初期設定"""
-        # メインのコンテナウィジェット
-        container = QWidget()
-        main_layout = QVBoxLayout(container)
+        # メインレイアウト
+        layout = QVBoxLayout(self)
         
-        # タブウィジェットを作成
+        # タブウィジェット
         self.tab_widget = QTabWidget()
-        main_layout.addWidget(self.tab_widget)
+        layout.addWidget(self.tab_widget)
         
         # 初期設定タブ
         self.group_manager = GroupManager(self)
@@ -35,10 +38,7 @@ class SystemManagementTab(QTabWidget):
         # 新規タブ追加ボタン
         self.add_tab_btn = QPushButton("新規タブ追加")
         self.add_tab_btn.clicked.connect(self.add_new_category_tab)
-        main_layout.addWidget(self.add_tab_btn)
-
-        # メインレイアウトを設定
-        self.setLayout(main_layout)
+        layout.addWidget(self.add_tab_btn)
 
     def load_data(self):
         """データの読み込み"""
@@ -60,6 +60,12 @@ class SystemManagementTab(QTabWidget):
             category_name = selected_category.text()
             category_id = selected_category.data(Qt.ItemDataRole.UserRole)
 
+            # 既存のタブをチェック
+            for i in range(self.tab_widget.count()):
+                if self.tab_widget.tabText(i) == category_name:
+                    self.tab_widget.setCurrentIndex(i)
+                    return
+
             # 新しいタブを作成して追加
             new_tab = CategoryContentTab(self, category_id, category_name)
             self.tab_widget.addTab(new_tab, category_name)
@@ -74,6 +80,7 @@ class SystemManagementTab(QTabWidget):
 class CategoryContentTab(QWidget):
     def __init__(self, parent, category_id, category_name):
         super().__init__(parent)
+        self.logger = logging.getLogger(__name__)
         self.category_id = category_id
         self.category_name = category_name
         self.setup_ui()
@@ -83,21 +90,56 @@ class CategoryContentTab(QWidget):
         layout = QVBoxLayout(self)
         
         # カテゴリー情報
-        layout.addWidget(QLabel(f"カテゴリー: {self.category_name}"))
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.addWidget(QLabel(f"カテゴリー: {self.category_name}"))
+        layout.addWidget(header)
         
         # スキル一覧
         self.skill_list = QListWidget()
         layout.addWidget(self.skill_list)
         
         # ボタン
-        button_layout = QHBoxLayout()
+        button_widget = QWidget()
+        button_layout = QHBoxLayout(button_widget)
         
         self.add_skill_btn = QPushButton("スキル追加")
         self.edit_skill_btn = QPushButton("スキル編集")
         self.delete_skill_btn = QPushButton("スキル削除")
         
+        self.add_skill_btn.clicked.connect(self.add_skill)
+        self.edit_skill_btn.clicked.connect(self.edit_skill)
+        self.delete_skill_btn.clicked.connect(self.delete_skill)
+        
         button_layout.addWidget(self.add_skill_btn)
         button_layout.addWidget(self.edit_skill_btn)
         button_layout.addWidget(self.delete_skill_btn)
         
-        layout.addLayout(button_layout)
+        layout.addWidget(button_widget)
+
+    def add_skill(self):
+        """スキルの追加"""
+        try:
+            self.logger.debug(f"Adding skill to category {self.category_name}")
+            # スキル追加の実装
+            pass
+        except Exception as e:
+            self.logger.error(f"Error adding skill: {str(e)}")
+
+    def edit_skill(self):
+        """スキルの編集"""
+        try:
+            self.logger.debug(f"Editing skill in category {self.category_name}")
+            # スキル編集の実装
+            pass
+        except Exception as e:
+            self.logger.error(f"Error editing skill: {str(e)}")
+
+    def delete_skill(self):
+        """スキルの削除"""
+        try:
+            self.logger.debug(f"Deleting skill from category {self.category_name}")
+            # スキル削除の実装
+            pass
+        except Exception as e:
+            self.logger.error(f"Error deleting skill: {str(e)}")
