@@ -1,6 +1,6 @@
 import sys
 import logging
-from PyQt6.QtWidgets import QApplication
+from .utils.memory_profiler import MemoryProfilerfrom PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QLocale, QTimer
 import platform
 from .views.main_window import MainWindow
@@ -8,7 +8,8 @@ from .views.main_window import MainWindow
 class App(QApplication):
     """アプリケーションのメインクラス"""
     def __init__(self, argv):
-        self.logger = logging.getLogger(__name__)
+        self._profiler = MemoryProfiler()
+        self._profiler.take_snapshot()  # ベースラインの取得        self.logger = logging.getLogger(__name__)
         self.logger.debug("Starting App initialization")
         
         # macOS特有の設定

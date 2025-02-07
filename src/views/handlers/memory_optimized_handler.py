@@ -271,3 +271,87 @@ class MemoryOptimizedHandler(QObject):
                 
         except Exception as e:
             self.logger.error(f"メモリチェックエラー: {e}")
+            self.logger.debug(
+                f"Memory Usage - RSS: {rss_mb:.1f}MB, "
+                f"VMS: {vms_mb:.1f}MB"
+            )
+            
+            if (force or 
+                rss_mb > self._memory_threshold_mb or 
+                vms_mb > self._vms_threshold_mb):
+                self.logger.info("強制クリーンアップ開始")
+                self._force_cleanup()
+                self._log_memory_stats()
+                self.logger.info("強制クリーンアップ完了")
+                
+        except Exception as e:
+            self.logger.error(f"メモリチェックエラー: {e}")
+
+    def analyze_memory(self):
+        """メモリ使用状況の詳細分析"""
+        try:
+            import tracemalloc
+            import linecache
+            from collections import Counter
+            
+            # トレースマロックの開始
+            tracemalloc.start()
+            
+            # 現在のメモリスナップショット
+            snapshot = tracemalloc.take_snapshot()
+            top_stats = snapshot.statistics('lineno')
+            
+            self.logger.debug("=== Memory Usage Analysis ===")
+            
+            # トップ10のメモリ使用箇所
+            for stat in top_stats[:10]:
+                frame = stat.traceback[0]
+                filename = os.path.basename(frame.filename)
+                line = linecache.getline(frame.filename, frame.lineno).strip()
+                size_mb = stat.size / (1024 * 1024)
+                self.logger.debug(f"{filename}:{frame.lineno}: {size_mb:.1f}MB\n    {line}")
+            
+            # オブジェクト数の分析
+            types = Counter(type(obj).__name__ for obj in gc.get_objects())
+            
+            self.logger.debug("\n=== Object Count Analysis ===")
+            for type_name, count in types.most_common(10):
+                self.logger.debug(f"{type_name}: {count}")
+            
+            # Qt特有のオブジェクト分析
+            qt_objects = [obj for obj in gc.get_objects() 
+                         if isinstance(obj, QObject)]
+            
+            self.logger.debug("\n=== Qt Object Analysis ===")
+            qt_types = Counter(type(obj).__name__ for obj in qt_objects)
+            for type_name, count in qt_types.most_common(10):
+                self.logger.debug(f"{type_name}: {count}")
+            
+            # CBOR関連オブジェクトの分析
+            cbor_objects = [obj for obj in gc.get_objects() 
+                          if type(obj).__name__.startswith('QCbor')]
+            
+            self.logger.debug("\n=== CBOR Object Analysis ===")
+            cbor_types = Counter(type(obj).__name__ for obj in cbor_objects)
+            for type_name, count in cbor_types.items():
+                self.logger.debug(f"{type_name}: {count}")
+            
+            # 循環参照の検出
+            self.logger.debug("\n=== Circular References ===")
+            for obj in gc.get_objects():
+                if isinstance(obj, QObject):
+                    try:
+                        refs = gc.get_referrers(obj)
+                        if len(refs) > 2:  # 通常の参照以外に余分な参照がある
+                            self.logger.warning(
+                                f"多重参照: {type(obj).__name__} "
+                                f"({len(refs)}件の参照)"
+                            )
+                    except Exception:
+                        pass
+            
+            # クリーンアップ
+            tracemalloc.stop()
+            
+        except Exception as e:
+            self.logger.error(f"メモリ分析エラー: {e}")
