@@ -5,6 +5,7 @@ from .views.main_window import MainWindow
 class App(MainWindow):
     """アプリケーションのメインクラス"""
     def __init__(self):
+        super().__init__()  # 親クラスの初期化
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing App")
-        super().__init__()  # MainWindowの初期化
+        self.show()  # ウィンドウを表示

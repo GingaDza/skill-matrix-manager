@@ -6,21 +6,21 @@ import os
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 20:38:34"
+        self.current_time = "2025-02-07 20:40:14"
         self.db_path = "database/skill_matrix.db"
         
+        # データベースディレクトリの作成
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        
         self.initialize_database()
         self.logger.info("データベースの初期化が完了しました")
 
     def get_connection(self):
-        """データベース接続を取得"""
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def initialize_database(self):
-        """データベースの初期化"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -43,11 +43,13 @@ class DatabaseManager:
                         group_id INTEGER,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
-                        FOREIGN KEY (group_id) REFERENCES groups (id)
+                        deleted_at TEXT,
+                        FOREIGN KEY (group_id) REFERENCES groups (id) 
                             ON DELETE SET NULL
                     )
                 ''')
-                
+
+                # 初期データの挿入
                 self._insert_initial_data(cursor)
                 conn.commit()
                 
@@ -56,10 +58,11 @@ class DatabaseManager:
             raise
 
     def _insert_initial_data(self, cursor):
-        """初期データの挿入"""
         try:
+            # グループ数を確認
             cursor.execute("SELECT COUNT(*) FROM groups")
             if cursor.fetchone()[0] == 0:
+                # 初期グループの挿入
                 groups = [
                     ("開発部", self.current_time, self.current_time),
                     ("営業部", self.current_time, self.current_time),
@@ -74,7 +77,6 @@ class DatabaseManager:
             raise
 
     def get_all_groups(self):
-        """全グループを取得"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -85,12 +87,16 @@ class DatabaseManager:
             return []
 
     def get_users_by_group(self, group_id):
-        """グループに属するユーザーを取得"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT id, name FROM users WHERE group_id = ? ORDER BY id",
+                    """
+                    SELECT id, name 
+                    FROM users 
+                    WHERE group_id = ? AND deleted_at IS NULL 
+                    ORDER BY id
+                    """,
                     (group_id,)
                 )
                 return cursor.fetchall()
@@ -99,7 +105,6 @@ class DatabaseManager:
             return []
 
     def add_user(self, name, group_id):
-        """ユーザーを追加"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -117,15 +122,14 @@ class DatabaseManager:
             raise
 
     def edit_user(self, user_id, name):
-        """ユーザーを編集"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    UPDATE users
-                    SET name = ?, updated_at = ?
-                    WHERE id = ?
+                    UPDATE users 
+                    SET name = ?, updated_at = ? 
+                    WHERE id = ? AND deleted_at IS NULL
                     """,
                     (name, self.current_time, user_id)
                 )
@@ -136,19 +140,28 @@ class DatabaseManager:
             raise
 
     def delete_user(self, user_id):
-        """ユーザーを削除"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # ユーザーの存在確認
-                cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+                cursor.execute(
+                    "SELECT id FROM users WHERE id = ? AND deleted_at IS NULL",
+                    (user_id,)
+                )
                 if not cursor.fetchone():
-                    self.logger.warning(f"User {user_id} not found")
+                    self.logger.warning(f"User {user_id} not found or already deleted")
                     return False
                 
-                # ユーザーを削除
-                cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                # 論理削除を実行
+                cursor.execute(
+                    """
+                    UPDATE users 
+                    SET deleted_at = ?, updated_at = ? 
+                    WHERE id = ?
+                    """,
+                    (self.current_time, self.current_time, user_id)
+                )
                 conn.commit()
                 
                 success = cursor.rowcount > 0
