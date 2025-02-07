@@ -6,7 +6,7 @@ import os
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 20:57:02"
+        self.current_time = "2025-02-07 20:58:52"
         self.db_path = "database/skill_matrix.db"
         
         # データベースディレクトリの作成
