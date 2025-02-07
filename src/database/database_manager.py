@@ -1,210 +1,227 @@
 import sqlite3
 import logging
-from datetime import datetime
+from typing import List, Tuple, Optional
 import os
+from datetime import datetime
+from contextlib import contextmanager
 
 class DatabaseManager:
+    """データベース管理クラス"""
+    
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 22:48:04"
-        self.db_path = "database/skill_matrix.db"
         
-        # データベースディレクトリの作成
+        # データベースファイルの設定
+        self.db_path = "data/skill_matrix.db"
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
-        self.initialize_database()
+        # 時刻の設定
+        self.current_time = "2025-02-07 22:51:04"
+        
+        # データベースの初期化
+        self._initialize_db()
         self.logger.info("データベースの初期化が完了しました")
 
-    def get_connection(self):
-        """データベース接続を取得"""
+    @contextmanager
+    def _get_connection(self):
+        """データベース接続のコンテキストマネージャー"""
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
-            conn.execute("PRAGMA foreign_keys = ON")
-            return conn
+            conn.row_factory = sqlite3.Row
+            yield conn
         except Exception as e:
-            self.logger.error(f"Database connection error: {e}", exc_info=True)
+            self.logger.error(f"データベース接続エラー: {e}")
+            if conn:
+                conn.rollback()
             raise
+        finally:
+            if conn:
+                conn.close()
 
-    def initialize_database(self):
+    def _initialize_db(self):
         """データベースの初期化"""
         try:
-            with self.get_connection() as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # グループテーブル
-                cursor.execute('''
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS groups (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL UNIQUE,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     )
-                ''')
+                """)
                 
                 # ユーザーテーブル
-                cursor.execute('''
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS users (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name TEXT NOT NULL,
                         group_id INTEGER,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
-                        deleted_at TEXT DEFAULT NULL,
                         FOREIGN KEY (group_id) REFERENCES groups (id)
+                            ON DELETE CASCADE
                     )
-                ''')
-
-                # 初期データの挿入
-                self._insert_initial_data(cursor)
+                """)
+                
+                # スキルテーブル
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS skills (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        category TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                """)
+                
+                # ユーザースキルテーブル
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS user_skills (
+                        user_id INTEGER,
+                        skill_id INTEGER,
+                        level INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        PRIMARY KEY (user_id, skill_id),
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                            ON DELETE CASCADE,
+                        FOREIGN KEY (skill_id) REFERENCES skills (id)
+                            ON DELETE CASCADE
+                    )
+                """)
+                
                 conn.commit()
                 
         except Exception as e:
-            self.logger.error(f"Database initialization error: {e}", exc_info=True)
+            self.logger.error(f"データベース初期化エラー: {e}")
             raise
 
-    def _insert_initial_data(self, cursor):
-        """初期データの挿入"""
+    def add_group(self, name: str) -> int:
+        """グループの追加"""
         try:
-            # グループ数を確認
-            cursor.execute("SELECT COUNT(*) FROM groups")
-            if cursor.fetchone()[0] == 0:
-                # 初期グループの挿入
-                groups = [
-                    ("開発部", self.current_time, self.current_time),
-                    ("営業部", self.current_time, self.current_time),
-                    ("管理部", self.current_time, self.current_time)
-                ]
-                cursor.executemany(
-                    "INSERT INTO groups (name, created_at, updated_at) VALUES (?, ?, ?)",
-                    groups
-                )
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    INSERT INTO groups (name, created_at, updated_at)
+                    VALUES (?, ?, ?)
+                """, (name, self.current_time, self.current_time))
+                
+                conn.commit()
+                return cursor.lastrowid
+                
+        except sqlite3.IntegrityError:
+            self.logger.error(f"グループ名 '{name}' は既に存在します")
+            raise ValueError(f"グループ名 '{name}' は既に使用されています")
         except Exception as e:
-            self.logger.error(f"Error inserting initial data: {e}", exc_info=True)
+            self.logger.error(f"グループ追加エラー: {e}")
             raise
 
-    def get_all_groups(self):
+    def remove_group(self, group_id: int):
+        """グループの削除"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    DELETE FROM groups
+                    WHERE id = ?
+                """, (group_id,))
+                
+                if cursor.rowcount == 0:
+                    raise ValueError(f"グループID {group_id} が見つかりません")
+                    
+                conn.commit()
+                
+        except Exception as e:
+            self.logger.error(f"グループ削除エラー: {e}")
+            raise
+
+    def get_all_groups(self) -> List[Tuple[int, str]]:
         """全グループの取得"""
-        self.logger.debug("Fetching all groups")
         try:
-            with self.get_connection() as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, name FROM groups ORDER BY id")
-                return cursor.fetchall()
+                
+                cursor.execute("""
+                    SELECT id, name
+                    FROM groups
+                    ORDER BY name
+                """)
+                
+                return [(row[0], row[1]) for row in cursor.fetchall()]
+                
         except Exception as e:
-            self.logger.error(f"Error fetching groups: {e}", exc_info=True)
-            return []
+            self.logger.error(f"グループ一覧取得エラー: {e}")
+            raise
 
-    def get_users_by_group(self, group_id):
-        """グループ内のユーザー取得"""
-        self.logger.debug(f"Fetching users for group {group_id}")
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    SELECT id, name 
-                    FROM users 
-                    WHERE group_id = ? AND deleted_at IS NULL 
-                    ORDER BY id
-                    """,
-                    (group_id,)
-                )
-                return cursor.fetchall()
-        except Exception as e:
-            self.logger.error(f"Error fetching users for group {group_id}: {e}", exc_info=True)
-            return []
-
-    def add_user(self, name, group_id):
+    def add_user_to_group(self, name: str, group_id: int) -> int:
         """ユーザーの追加"""
-        self.logger.debug(f"Adding user {name} to group {group_id}")
         try:
-            with self.get_connection() as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # グループの存在確認
-                cursor.execute("SELECT id FROM groups WHERE id = ?", (group_id,))
+                cursor.execute("""
+                    SELECT id FROM groups WHERE id = ?
+                """, (group_id,))
+                
                 if not cursor.fetchone():
-                    self.logger.error(f"Group {group_id} does not exist")
-                    return None
+                    raise ValueError(f"グループID {group_id} が見つかりません")
                 
                 # ユーザーの追加
-                cursor.execute(
-                    """
+                cursor.execute("""
                     INSERT INTO users (name, group_id, created_at, updated_at)
                     VALUES (?, ?, ?, ?)
-                    """,
-                    (name, group_id, self.current_time, self.current_time)
-                )
+                """, (name, group_id, self.current_time, self.current_time))
+                
                 conn.commit()
-                
-                new_user_id = cursor.lastrowid
-                self.logger.info(f"User {name} (ID: {new_user_id}) added successfully")
-                return new_user_id
-                
-        except sqlite3.IntegrityError as e:
-            self.logger.error(f"Database integrity error adding user: {e}", exc_info=True)
-            return None
-        except Exception as e:
-            self.logger.error(f"Error adding user: {e}", exc_info=True)
-            return None
-
-    def edit_user(self, user_id, name):
-        """ユーザーの編集"""
-        self.logger.debug(f"Editing user {user_id} with name {name}")
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    UPDATE users 
-                    SET name = ?, updated_at = ? 
-                    WHERE id = ? AND deleted_at IS NULL
-                    """,
-                    (name, self.current_time, user_id)
-                )
-                conn.commit()
-                
-                success = cursor.rowcount > 0
-                if success:
-                    self.logger.info(f"User {user_id} updated successfully")
-                return success
+                return cursor.lastrowid
                 
         except Exception as e:
-            self.logger.error(f"Error editing user {user_id}: {e}", exc_info=True)
-            return False
+            self.logger.error(f"ユーザー追加エラー: {e}")
+            raise
 
-    def delete_user(self, user_id):
-        """ユーザーの論理削除"""
-        self.logger.debug(f"Deleting user {user_id}")
+    def remove_user(self, user_id: int):
+        """ユーザーの削除"""
         try:
-            with self.get_connection() as conn:
+            with self._get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # ユーザーの存在確認
-                cursor.execute(
-                    "SELECT id FROM users WHERE id = ? AND deleted_at IS NULL",
-                    (user_id,)
-                )
-                if not cursor.fetchone():
-                    self.logger.warning(f"User {user_id} not found or already deleted")
-                    return False
-                
-                # 論理削除を実行
-                cursor.execute(
-                    """
-                    UPDATE users 
-                    SET deleted_at = ?, updated_at = ? 
+                cursor.execute("""
+                    DELETE FROM users
                     WHERE id = ?
-                    """,
-                    (self.current_time, self.current_time, user_id)
-                )
+                """, (user_id,))
+                
+                if cursor.rowcount == 0:
+                    raise ValueError(f"ユーザーID {user_id} が見つかりません")
+                    
                 conn.commit()
                 
-                success = cursor.rowcount > 0
-                if success:
-                    self.logger.info(f"User {user_id} deleted successfully")
-                return success
-                    
         except Exception as e:
-            self.logger.error(f"Error deleting user {user_id}: {e}", exc_info=True)
-            return False
+            self.logger.error(f"ユーザー削除エラー: {e}")
+            raise
+
+    def get_users_by_group(self, group_id: int) -> List[Tuple[int, str]]:
+        """グループ内のユーザー一覧を取得"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT id, name
+                    FROM users
+                    WHERE group_id = ?
+                    ORDER BY name
+                """, (group_id,))
+                
+                return [(row[0], row[1]) for row in cursor.fetchall()]
+                
+        except Exception as e:
+            self.logger.error(f"ユーザー一覧取得エラー: {e}")
+            raise
