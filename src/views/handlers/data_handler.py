@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox, QListWidgetItem
 from PyQt6.QtCore import QObject, Qt
 import logging
 import traceback
@@ -20,6 +20,7 @@ class DataHandler(QObject):
     def refresh_data(self):
         """データの更新"""
         if self.is_updating:
+            self.logger.debug("Update already in progress, skipping")
             return
 
         try:
@@ -35,16 +36,21 @@ class DataHandler(QObject):
 
             left_pane.group_combo.clear()
             for group_id, group_name in groups:
+                self.logger.debug(f"Adding group: {group_id} - {group_name}")
                 left_pane.group_combo.addItem(group_name, group_id)
 
+            # 現在のグループを再選択
             if current_group_id is not None:
                 index = left_pane.group_combo.findData(current_group_id)
                 if index >= 0:
                     left_pane.group_combo.setCurrentIndex(index)
+                    self.logger.debug(f"Restored selection to group ID: {current_group_id}")
             elif left_pane.group_combo.count() > 0:
                 left_pane.group_combo.setCurrentIndex(0)
+                self.logger.debug("Set initial group selection")
 
             self.refresh_user_list()
+            self.logger.debug("Data refresh completed successfully")
 
         except Exception as e:
             self.logger.error(f"Error refreshing data: {e}\n{traceback.format_exc()}")
@@ -59,14 +65,18 @@ class DataHandler(QObject):
             group_id = left_pane.get_current_group_id()
 
             if group_id is None:
+                self.logger.debug("No group selected, clearing user list")
                 left_pane.user_list.clear()
                 return
 
+            self.logger.debug(f"Fetching users for group {group_id}")
             users = self.db.get_users_by_group(group_id)
-            left_pane.user_list.clear()
+            self.logger.debug(f"Found {len(users)} users")
 
+            left_pane.user_list.clear()
             for user_id, user_name in users:
-                item = left_pane.user_list.item(user_name)
+                self.logger.debug(f"Adding user: {user_id} - {user_name}")
+                item = QListWidgetItem(user_name)
                 item.setData(Qt.ItemDataRole.UserRole, user_id)
                 left_pane.user_list.addItem(item)
 
