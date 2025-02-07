@@ -1,6 +1,7 @@
 import sys
 import traceback
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt  # Qtをインポート
 from src.app import App
 from src.debug_sync import setup_debug_logging, log_system_info
 
@@ -15,6 +16,7 @@ def main():
         
         # IMKClientの問題を回避するための設定
         app.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
+        app.setAttribute(Qt.ApplicationAttribute.AA_DisableWindowContextHelpButton)
         
         window = App()
         window.show()
