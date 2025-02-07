@@ -1,25 +1,36 @@
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
-import logging
-
-logger = logging.getLogger(__name__)
+from PyQt6.QtCore import pyqtSignal
 
 class GroupListWidget(QListWidget):
-    def __init__(self, parent=None):
+    """グループ一覧を表示するウィジェット"""
+    
+    group_selected = pyqtSignal(int)  # グループ選択時のシグナル
+
+    def __init__(self, parent=None, db=None):
         super().__init__(parent)
-        self.parent = parent
-        logger.debug("GroupListWidget initialized")
+        self.db = db if db else parent.db
+        self.setup_ui()
+        self.load_groups()
+
+    def setup_ui(self):
+        """UIの初期設定"""
+        self.setAlternatingRowColors(True)
+        self.itemClicked.connect(self._on_item_clicked)
 
     def load_groups(self):
-        try:
-            self.clear()
-            groups = self.parent.db.get_all_groups()
-            
-            for group_id, name, user_count in groups:
-                item = QListWidgetItem(f"{name} ({user_count}人)")
-                item.item_id = group_id
-                self.addItem(item)
-            
-            logger.debug(f"Loaded {len(groups)} groups")
-        except Exception as e:
-            logger.error(f"Error loading groups: {str(e)}")
-            raise
+        """グループ一覧の読み込み"""
+        self.clear()
+        groups = self.db.get_all_groups()
+        for group in groups:
+            item = QListWidgetItem(group[1])  # group[1] は name
+            item.setData(Qt.ItemDataRole.UserRole, group[0])  # group[0] は id
+            self.addItem(item)
+
+    def _on_item_clicked(self, item):
+        """アイテムクリック時の処理"""
+        group_id = item.data(Qt.ItemDataRole.UserRole)
+        self.group_selected.emit(group_id)
+
+    def refresh(self):
+        """表示の更新"""
+        self.load_groups()

@@ -2,23 +2,17 @@ import sqlite3
 import logging
 from pathlib import Path
 from ..logging_config import setup_logging
+from datetime import datetime
 
 class DatabaseManager:
     """データベース管理クラス"""
     
     def __init__(self, db_path='skill_matrix.db'):
-        """
-        Parameters:
-        -----------
-        db_path : str
-            データベースファイルのパス
-        """
         self.db_path = db_path
         self.logger = logging.getLogger(__name__)
         setup_logging()
 
     def get_connection(self):
-        """データベース接続を取得"""
         return sqlite3.connect(self.db_path)
 
     def initialize_database(self):
@@ -103,22 +97,60 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    # グループ管理メソッド
+    def get_all_groups(self):
+        """すべてのグループを取得"""
+        query = """
+        SELECT id, name, description, created_at, updated_at 
+        FROM groups 
+        ORDER BY name
+        """
+        return self.execute_query(query)
+
+    def get_group(self, group_id):
+        """指定されたIDのグループを取得"""
+        query = """
+        SELECT id, name, description, created_at, updated_at 
+        FROM groups 
+        WHERE id = ?
+        """
+        result = self.execute_query(query, (group_id,))
+        return result[0] if result else None
+
+    def add_group(self, name, description=""):
+        """新しいグループを追加"""
+        query = """
+        INSERT INTO groups (name, description) 
+        VALUES (?, ?)
+        """
+        try:
+            self.execute_query(query, (name, description))
+            return True
+        except sqlite3.IntegrityError:
+            self.logger.error(f"グループ名 '{name}' は既に存在します")
+            return False
+
+    def update_group(self, group_id, name, description=""):
+        """グループ情報を更新"""
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        query = """
+        UPDATE groups 
+        SET name = ?, description = ?, updated_at = ? 
+        WHERE id = ?
+        """
+        return self.execute_query(
+            query, 
+            (name, description, current_time, group_id)
+        )
+
+    def delete_group(self, group_id):
+        """グループを削除"""
+        query = "DELETE FROM groups WHERE id = ?"
+        return self.execute_query(query, (group_id,))
+
+    # データベース操作の基本メソッド
     def execute_query(self, query, params=None):
-        """
-        SQLクエリを実行
-        
-        Parameters:
-        -----------
-        query : str
-            実行するSQLクエリ
-        params : tuple, optional
-            クエリパラメータ
-        
-        Returns:
-        --------
-        list
-            クエリ結果
-        """
+        """SQLクエリを実行"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -139,16 +171,7 @@ class DatabaseManager:
             conn.close()
 
     def execute_many(self, query, params_list):
-        """
-        複数のSQLクエリを実行
-        
-        Parameters:
-        -----------
-        query : str
-            実行するSQLクエリ
-        params_list : list of tuple
-            クエリパラメータのリスト
-        """
+        """複数のSQLクエリを実行"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
