@@ -1,68 +1,83 @@
-# src/desktop/controllers/category_controller.py
-from typing import List, Optional
-from ..models.category import Category, CategoryManager
-import logging
-from ..utils.time_utils import TimeProvider
-
-logger = logging.getLogger(__name__)
+from ..models.category import Category
+from ..database.database_manager import DatabaseManager
 
 class CategoryController:
-    """カテゴリーコントローラー"""
-    
-    def __init__(self, category_manager: CategoryManager):
-        self.current_time = TimeProvider.get_current_time()
-        self.current_user = TimeProvider.get_current_user()
-        
-        self.category_manager = category_manager
-        logger.debug(f"{self.current_time} - CategoryController initialized")
+    """カテゴリーのコントローラー"""
 
-    def create_category(self, name: str, description: str = None, parent_id: Optional[int] = None) -> int:
+    def __init__(self, db=None):
+        self.db = db if db else DatabaseManager()
+
+    def create_category(self, name, description="", parent_id=None):
         """カテゴリーを作成"""
         try:
-            category_id = self.category_manager.create_category(name, description, parent_id)
-            logger.debug(f"{self.current_time} - Created category: {name} (ID: {category_id})")
+            category_id = self.db.add_category(name, description, parent_id)
             return category_id
         except Exception as e:
-            logger.error(f"{self.current_time} - Failed to create category: {str(e)}")
-            raise
+            print(f"カテゴリーの作成に失敗: {e}")
+            return None
 
-    def get_category(self, category_id: int) -> Category:
+    def get_category(self, category_id):
         """カテゴリーを取得"""
         try:
-            category = self.category_manager.get_category(category_id)
-            if category is None:
-                raise ValueError(f"Category with ID {category_id} not found")
-            return category
+            data = self.db.get_category(category_id)
+            if data:
+                category = Category(
+                    id=data[0],
+                    name=data[1],
+                    description=data[2],
+                    parent_id=data[3]
+                )
+                return category
+            return None
         except Exception as e:
-            logger.error(f"{self.current_time} - Failed to get category {category_id}: {str(e)}")
-            raise
+            print(f"カテゴリーの取得に失敗: {e}")
+            return None
 
-    def get_all_categories(self) -> List[Category]:
-        """全てのカテゴリーを取得"""
+    def get_all_categories(self):
+        """すべてのカテゴリーを取得"""
         try:
-            return self.category_manager.get_all_categories()
+            categories = []
+            data = self.db.get_all_categories()
+            for row in data:
+                category = Category(
+                    id=row[0],
+                    name=row[1],
+                    description=row[2],
+                    parent_id=row[3]
+                )
+                categories.append(category)
+            return categories
         except Exception as e:
-            logger.error(f"{self.current_time} - Failed to get all categories: {str(e)}")
-            raise
+            print(f"カテゴリー一覧の取得に失敗: {e}")
+            return []
 
-    def update_category(self, category_id: int, name: str, description: str = None) -> bool:
+    def update_category(self, category_id, name, description="", parent_id=None):
         """カテゴリーを更新"""
         try:
-            success = self.category_manager.update_category(category_id, name, description)
-            if success:
-                logger.debug(f"{self.current_time} - Updated category: {name} (ID: {category_id})")
+            success = self.db.update_category(
+                category_id,
+                name,
+                description,
+                parent_id
+            )
             return success
         except Exception as e:
-            logger.error(f"{self.current_time} - Failed to update category: {str(e)}")
-            raise
+            print(f"カテゴリーの更新に失敗: {e}")
+            return False
 
-    def delete_category(self, category_id: int) -> bool:
+    def delete_category(self, category_id):
         """カテゴリーを削除"""
         try:
-            success = self.category_manager.delete_category(category_id)
-            if success:
-                logger.debug(f"{self.current_time} - Deleted category ID: {category_id}")
+            success = self.db.delete_category(category_id)
             return success
         except Exception as e:
-            logger.error(f"{self.current_time} - Failed to delete category: {str(e)}")
-            raise
+            print(f"カテゴリーの削除に失敗: {e}")
+            return False
+
+    def get_category_hierarchy(self):
+        """カテゴリーの階層構造を取得"""
+        try:
+            return self.db.get_category_hierarchy()
+        except Exception as e:
+            print(f"カテゴリー階層の取得に失敗: {e}")
+            return []

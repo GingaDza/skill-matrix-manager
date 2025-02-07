@@ -1,4 +1,4 @@
-# src/desktop/views/components/categories/__init__.py
+"""カテゴリー関連のコンポーネント"""
 from .category_manager_widget import CategoryManagerWidget
 from .category_tree_widget import CategoryTreeWidget
 
