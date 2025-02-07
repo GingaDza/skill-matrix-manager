@@ -21,7 +21,7 @@ class DatabaseManager:
             self.logger.info("古いデータベースファイルを削除しました")
         
         # 時刻の設定
-        self.current_time = "2025-02-07 23:40:08"
+        self.current_time = "2025-02-07 23:42:05"
         
         # データベースの初期化
         self._initialize_db()
