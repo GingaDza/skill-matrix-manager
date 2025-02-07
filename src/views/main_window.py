@@ -5,7 +5,7 @@ import sys
 import traceback
 from .components.left_pane import LeftPane
 from .components.right_pane import RightPane
-from .handlers.data_handler import DataHandler
+from .handlers.memory_optimized_handler import MemoryOptimizedHandler as DataHandler
 from .handlers.event_handler import EventHandler
 from ..database.database_manager import DatabaseManager
 
