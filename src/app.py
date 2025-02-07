@@ -1,5 +1,5 @@
-import logging
 import sys
+import logging
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 from .views.main_window import MainWindow
@@ -11,12 +11,19 @@ class App(QApplication):
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing App")
         
-        # アプリケーション情報の設定
+        # macOS特有の設定
+        if sys.platform == 'darwin':
+            # Input Method対策
+            self.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
+            self.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus)
+            # フォーカス関連の設定
+            self.setAttribute(Qt.ApplicationAttribute.AA_MacPluginApplication)
+        
+        # アプリケーション情報
         self.setApplicationName("スキルマトリックス管理システム")
         self.setApplicationVersion("1.0.0")
-        self.setStyle("Fusion")
         
-        # メインウィンドウのインスタンス化
+        # メインウィンドウ
         self.main_window = None
 
     def start(self):
