@@ -8,9 +8,12 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QTabWidget,
     QLabel,
-    QSplitter
+    QSplitter,
+    QMessageBox,
+    QStatusBar
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeySequence, QShortcut
 from .tabs.system_management.initial_settings_tab import InitialSettingsTab
 from .tabs.system_management.data_io_tab import DataIOTab
 from .tabs.system_management.system_info_tab import SystemInfoTab
@@ -27,6 +30,43 @@ class MainWindow(QMainWindow):
         self.db = DatabaseManager()
         TimeProvider.set_current_user("GingaDza")
         self.setup_ui()
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        """ショートカットキーの設定"""
+        # 新規作成
+        new_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        new_shortcut.activated.connect(self.new_item)
+
+        # 保存
+        save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        save_shortcut.activated.connect(self.save_data)
+
+        # 印刷
+        print_shortcut = QShortcut(QKeySequence("Ctrl+P"), self)
+        print_shortcut.activated.connect(self.print_data)
+
+        # アプリケーション終了
+        quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        quit_shortcut.activated.connect(self.close)
+
+    def new_item(self):
+        """新規アイテムの作成"""
+        current_tab = self.tab_widget.currentWidget()
+        if hasattr(current_tab, 'add_item'):
+            current_tab.add_item()
+
+    def save_data(self):
+        """データの保存"""
+        current_tab = self.tab_widget.currentWidget()
+        if hasattr(current_tab, 'save_data'):
+            current_tab.save_data()
+
+    def print_data(self):
+        """データの印刷"""
+        current_tab = self.tab_widget.currentWidget()
+        if hasattr(current_tab, 'print_data'):
+            current_tab.print_data()
 
     def setup_ui(self):
         """UIの設定"""
@@ -49,6 +89,10 @@ class MainWindow(QMainWindow):
         left_panel = QWidget()
         left_layout = QVBoxLayout()
         left_panel.setLayout(left_layout)
+
+        # ユーザー情報
+        user_info = QLabel(f"ログインユーザー: {TimeProvider.get_current_user()}")
+        left_layout.addWidget(user_info)
 
         # グループ選択コンボボックス
         group_layout = QHBoxLayout()
@@ -89,13 +133,15 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.tab_widget)
 
         # システム管理タブの追加
-        self.system_tab = InitialSettingsTab(self)
-        self.data_io_tab = DataIOTab(self)
-        self.system_info_tab = SystemInfoTab(self)
-
         system_tabs = QTabWidget()
+        
+        self.system_tab = InitialSettingsTab(self)
         system_tabs.addTab(self.system_tab, "初期設定")
+        
+        self.data_io_tab = DataIOTab(self)
         system_tabs.addTab(self.data_io_tab, "データ入出力")
+        
+        self.system_info_tab = SystemInfoTab(self)
         system_tabs.addTab(self.system_info_tab, "システム情報")
 
         self.tab_widget.addTab(system_tabs, "システム管理")
@@ -109,6 +155,11 @@ class MainWindow(QMainWindow):
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(0, 3)  # 左側の比率
         splitter.setStretchFactor(1, 7)  # 右側の比率
+
+        # ステータスバー
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("準備完了")
 
         # 初期データの読み込み
         self.load_initial_data()
@@ -141,14 +192,17 @@ class MainWindow(QMainWindow):
     def add_user(self):
         """ユーザーの追加"""
         # TODO: ユーザー追加ダイアログの表示
+        pass
 
     def edit_user(self):
         """ユーザーの編集"""
         # TODO: ユーザー編集ダイアログの表示
+        pass
 
     def delete_user(self):
         """ユーザーの削除"""
         # TODO: ユーザー削除の確認と実行
+        pass
 
     def add_category_tab(self, category_name):
         """カテゴリータブの追加"""
