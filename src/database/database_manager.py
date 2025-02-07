@@ -1,245 +1,292 @@
+"""データベース管理モジュール"""
 import sqlite3
 import logging
-from typing import List, Tuple, Optional
 import os
 from datetime import datetime
-from contextlib import contextmanager
+from typing import List, Dict, Optional
 
 class DatabaseManager:
     """データベース管理クラス"""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.current_time = "2025-02-07 23:44:47"
         
-        # データベースファイルの設定
-        self.db_path = "data/skill_matrix.db"
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        try:
+            self._init_database()
+        except Exception as e:
+            self.logger.exception("データベース初期化エラー")
+            raise
+
+    def _init_database(self):
+        """データベースの初期化"""
+        db_path = "data/skill_matrix.db"
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         
-        # 古いデータベースファイルを削除
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        # 既存のDBファイルを削除（開発用）
+        if os.path.exists(db_path):
+            os.remove(db_path)
             self.logger.info("古いデータベースファイルを削除しました")
         
-        # 時刻の設定
-        self.current_time = "2025-02-07 23:42:05"
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
         
-        # データベースの初期化
-        self._initialize_db()
+        self._create_tables()
         self.logger.info("データベースの初期化が完了しました")
 
-    @contextmanager
-    def _get_connection(self):
-        """データベース接続のコンテキストマネージャー"""
-        conn = None
-        try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            yield conn
-        except Exception as e:
-            self.logger.error(f"データベース接続エラー: {e}")
-            if conn:
-                conn.rollback()
-            raise
-        finally:
-            if conn:
-                conn.close()
+    def _create_tables(self):
+        """テーブルの作成"""
+        cursor = self.conn.cursor()
+        
+        # グループテーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        
+        # ユーザーテーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                group_id INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (group_id) REFERENCES groups(id)
+            )
+        """)
+        
+        # 親カテゴリーテーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS parent_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        
+        # 子カテゴリー（スキル）テーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS skills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                parent_id INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (parent_id) REFERENCES parent_categories(id)
+            )
+        """)
+        
+        # スキル評価テーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS skill_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                skill_id INTEGER,
+                level INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (skill_id) REFERENCES skills(id)
+            )
+        """)
+        
+        self.conn.commit()
 
-    def _initialize_db(self):
-        """データベースの初期化"""
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # 外部キー制約を有効化
-                cursor.execute("PRAGMA foreign_keys = ON")
-                
-                # グループテーブル
-                cursor.execute("""
-                    CREATE TABLE groups (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL UNIQUE,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
-                    )
-                """)
-                
-                # ユーザーテーブル
-                cursor.execute("""
-                    CREATE TABLE users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        group_id INTEGER,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        FOREIGN KEY (group_id) REFERENCES groups (id)
-                            ON DELETE CASCADE
-                    )
-                """)
-                
-                # スキルテーブル
-                cursor.execute("""
-                    CREATE TABLE skills (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL UNIQUE,
-                        category TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
-                    )
-                """)
-                
-                # ユーザースキルテーブル
-                cursor.execute("""
-                    CREATE TABLE user_skills (
-                        user_id INTEGER,
-                        skill_id INTEGER,
-                        level INTEGER NOT NULL DEFAULT 0,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        PRIMARY KEY (user_id, skill_id),
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                            ON DELETE CASCADE,
-                        FOREIGN KEY (skill_id) REFERENCES skills (id)
-                            ON DELETE CASCADE
-                    )
-                """)
-                
-                conn.commit()
-                
-        except Exception as e:
-            self.logger.error(f"データベース初期化エラー: {e}")
-            raise
-
-    def add_group(self, name: str) -> int:
+    def add_group(self, name: str) -> bool:
         """グループの追加"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    INSERT INTO groups (name, created_at, updated_at)
-                    VALUES (?, ?, ?)
-                """, (name, self.current_time, self.current_time))
-                
-                conn.commit()
-                return cursor.lastrowid
-                
-        except sqlite3.IntegrityError:
-            self.logger.error(f"グループ名 '{name}' は既に存在します")
-            raise ValueError(f"グループ名 '{name}' は既に使用されています")
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO groups (name, created_at, updated_at)
+                VALUES (?, ?, ?)
+                """,
+                (name, self.current_time, self.current_time)
+            )
+            self.conn.commit()
+            return True
         except Exception as e:
-            self.logger.error(f"グループ追加エラー: {e}")
-            raise
+            self.logger.exception(f"グループ追加エラー: {name}")
+            return False
 
-    def remove_group(self, group_id: int):
-        """グループの削除"""
+    def get_groups(self) -> List[str]:
+        """グループ一覧の取得"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    DELETE FROM groups
-                    WHERE id = ?
-                """, (group_id,))
-                
-                if cursor.rowcount == 0:
-                    raise ValueError(f"グループID {group_id} が見つかりません")
-                    
-                conn.commit()
-                
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT name FROM groups ORDER BY name")
+            return [row['name'] for row in cursor.fetchall()]
         except Exception as e:
-            self.logger.error(f"グループ削除エラー: {e}")
-            raise
+            self.logger.exception("グループ一覧取得エラー")
+            return []
 
-    def get_all_groups(self) -> List[Tuple[int, str]]:
-        """全グループの取得"""
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    SELECT id, name
-                    FROM groups
-                    ORDER BY name
-                """)
-                
-                return [(row[0], row[1]) for row in cursor.fetchall()]
-                
-        except Exception as e:
-            self.logger.error(f"グループ一覧取得エラー: {e}")
-            raise
-
-    def add_user_to_group(self, name: str, group_id: int) -> int:
+    def add_user(self, name: str, group_id: int) -> bool:
         """ユーザーの追加"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # グループの存在確認
-                cursor.execute("""
-                    SELECT id FROM groups WHERE id = ?
-                """, (group_id,))
-                
-                if not cursor.fetchone():
-                    raise ValueError(f"グループID {group_id} が見つかりません")
-                
-                # ユーザーの追加
-                cursor.execute("""
-                    INSERT INTO users (name, group_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?)
-                """, (name, group_id, self.current_time, self.current_time))
-                
-                conn.commit()
-                return cursor.lastrowid
-                
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO users (name, group_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (name, group_id, self.current_time, self.current_time)
+            )
+            self.conn.commit()
+            return True
         except Exception as e:
-            self.logger.error(f"ユーザー追加エラー: {e}")
-            raise
+            self.logger.exception(f"ユーザー追加エラー: {name}")
+            return False
 
-    def remove_user(self, user_id: int):
-        """ユーザーの削除"""
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    DELETE FROM users
-                    WHERE id = ?
-                """, (user_id,))
-                
-                if cursor.rowcount == 0:
-                    raise ValueError(f"ユーザーID {user_id} が見つかりません")
-                    
-                conn.commit()
-                
-        except Exception as e:
-            self.logger.error(f"ユーザー削除エラー: {e}")
-            raise
-
-    def get_users_by_group(self, group_id: int) -> List[Tuple[int, str]]:
+    def get_users_in_group(self, group_name: str) -> List[str]:
         """グループ内のユーザー一覧を取得"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    SELECT id, name
-                    FROM users
-                    WHERE group_id = ?
-                    ORDER BY name
-                """, (group_id,))
-                
-                return [(row[0], row[1]) for row in cursor.fetchall()]
-                
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT u.name
+                FROM users u
+                JOIN groups g ON u.group_id = g.id
+                WHERE g.name = ?
+                ORDER BY u.name
+                """,
+                (group_name,)
+            )
+            return [row['name'] for row in cursor.fetchall()]
         except Exception as e:
-            self.logger.error(f"ユーザー一覧取得エラー: {e}")
-            raise
+            self.logger.exception(f"ユーザー一覧取得エラー: {group_name}")
+            return []
 
-    def reset_connections(self):
-        """データベース接続のリセット"""
+    def add_parent_category(self, name: str) -> bool:
+        """親カテゴリーの追加"""
         try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("PRAGMA shrink_memory")
-                conn.commit()
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO parent_categories (name, created_at, updated_at)
+                VALUES (?, ?, ?)
+                """,
+                (name, self.current_time, self.current_time)
+            )
+            self.conn.commit()
+            return True
         except Exception as e:
-            self.logger.error(f"接続リセットエラー: {e}")
+            self.logger.exception(f"親カテゴリー追加エラー: {name}")
+            return False
+
+    def get_parent_categories(self) -> List[str]:
+        """親カテゴリー一覧の取得"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT name FROM parent_categories ORDER BY name")
+            return [row['name'] for row in cursor.fetchall()]
+        except Exception as e:
+            self.logger.exception("親カテゴリー一覧取得エラー")
+            return []
+
+    def add_skill(self, name: str, parent_id: int) -> bool:
+        """スキルの追加"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO skills (name, parent_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (name, parent_id, self.current_time, self.current_time)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.logger.exception(f"スキル追加エラー: {name}")
+            return False
+
+    def get_skills_by_parent(self, parent_name: str) -> List[str]:
+        """親カテゴリーに属するスキル一覧の取得"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT s.name
+                FROM skills s
+                JOIN parent_categories p ON s.parent_id = p.id
+                WHERE p.name = ?
+                ORDER BY s.name
+                """,
+                (parent_name,)
+            )
+            return [row['name'] for row in cursor.fetchall()]
+        except Exception as e:
+            self.logger.exception(f"スキル一覧取得エラー: {parent_name}")
+            return []
+
+    def set_skill_level(self, user_id: int, skill_id: int, level: int) -> bool:
+        """スキルレベルの設定"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO skill_evaluations
+                (user_id, skill_id, level, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (user_id, skill_id, level, self.current_time, self.current_time)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.logger.exception("スキルレベル設定エラー")
+            return False
+
+    def get_user_skills(self, user_name: str, category_name: str) -> Dict[str, int]:
+        """ユーザーのスキルレベルを取得"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT s.name, se.level
+                FROM skill_evaluations se
+                JOIN users u ON se.user_id = u.id
+                JOIN skills s ON se.skill_id = s.id
+                JOIN parent_categories p ON s.parent_id = p.id
+                WHERE u.name = ? AND p.name = ?
+                """,
+                (user_name, category_name)
+            )
+            return {row['name']: row['level'] for row in cursor.fetchall()}
+        except Exception as e:
+            self.logger.exception(f"スキルレベル取得エラー: {user_name}")
+            return {}
+
+    def get_group_skills(self, group_name: str) -> Dict[str, float]:
+        """グループの平均スキルレベルを取得"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                SELECT s.name, AVG(se.level) as avg_level
+                FROM skill_evaluations se
+                JOIN users u ON se.user_id = u.id
+                JOIN groups g ON u.group_id = g.id
+                JOIN skills s ON se.skill_id = s.id
+                WHERE g.name = ?
+                GROUP BY s.name
+                """,
+                (group_name,)
+            )
+            return {row['name']: float(row['avg_level']) for row in cursor.fetchall()}
+        except Exception as e:
+            self.logger.exception(f"グループスキル取得エラー: {group_name}")
+            return {}
+
+    def __del__(self):
+        """デストラクタ"""
+        try:
+            if hasattr(self, 'conn'):
+                self.conn.close()
+        except Exception as e:
+            self.logger.exception("データベース接続終了エラー")
