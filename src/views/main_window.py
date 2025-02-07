@@ -1,163 +1,118 @@
-from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QMessageBox
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QCoreApplication
+from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout
+from PyQt6.QtCore import Qt
 import logging
-import sys
-import traceback
+from typing import Optional
+from ..database.database_manager import DatabaseManager
 from .components.left_pane import LeftPane
 from .components.right_pane import RightPane
 from .handlers.memory_optimized_handler import MemoryOptimizedHandler as DataHandler
 from .handlers.event_handler import EventHandler
-from ..database.database_manager import DatabaseManager
 
 class MainWindow(QMainWindow):
     """メインウィンドウクラス"""
-    window_closed = pyqtSignal()
-    user_deleted = pyqtSignal(int)
-    data_changed = pyqtSignal()
-
+    
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
         self.logger.debug("Starting MainWindow initialization")
         
-        if not QCoreApplication.instance():
-            self.logger.critical("QApplication not created before MainWindow")
-            raise RuntimeError("QApplication must be created before MainWindow")
-            
         super().__init__()
         self.logger.debug("MainWindow parent initialization complete")
         
-        # クラッシュ時のスタックトレース出力を設定
-        sys.excepthook = self._exception_hook
+        # コンポーネントの初期化
+        self.logger.debug("Initializing components")
+        try:
+            self._initialize_components()
+        except Exception as e:
+            self.logger.critical(f"Failed to initialize components: {e}")
+            raise
+            
+        # UIのセットアップ
+        self.logger.debug("Setting up UI")
+        try:
+            self._setup_ui()
+        except Exception as e:
+            self.logger.critical(f"Failed to setup UI: {e}")
+            raise
+            
+        # シグナルの接続
+        self.logger.debug("Connecting signals")
+        try:
+            self._connect_signals()
+        except Exception as e:
+            self.logger.critical(f"Failed to connect signals: {e}")
+            raise
+            
+        self.logger.debug("Signal connections completed")
         
-        # メモリ管理の追跡
-        self._debug_refs = set()
-        
-        self._initialize_components()
-        self._setup_ui()
-        self._connect_signals()
-        
-        # 初期データ読み込み
-        QTimer.singleShot(100, self._safe_initial_load)
+        # 初期データの安全な読み込み
+        self.logger.debug("Starting safe initial load")
+        try:
+            self._safe_initial_load()
+        except Exception as e:
+            self.logger.critical(f"Failed to load initial data: {e}")
+            raise
 
     def _initialize_components(self):
         """コンポーネントの初期化"""
-        self.logger.debug("Initializing components")
-        try:
-            self.db = DatabaseManager()
-            self.data_handler = DataHandler(self.db, self)
-            self.event_handler = EventHandler(self.db, self)
-            self.left_pane = LeftPane(self)
-            self.right_pane = RightPane(self)
-            
-            # コンポーネントの参照を追跡
-            for component in [self.data_handler, self.event_handler, self.left_pane, self.right_pane]:
-                self._track_ref(component)
-                
-        except Exception as e:
-            self.logger.critical(f"Failed to initialize components: {e}\n{traceback.format_exc()}")
-            raise
+        # データベースの初期化
+        self.db = DatabaseManager()
+        
+        # 左ペインの初期化
+        self.left_pane = LeftPane()
+        self.logger.debug("Tracking new object: LeftPane")
+        
+        # 右ペインの初期化
+        self.right_pane = RightPane()
+        self.logger.debug("Tracking new object: RightPane")
+        
+        # データハンドラーの初期化
+        self.data_handler = DataHandler(self.db, self)
+        self.logger.debug("Tracking new object: MemoryOptimizedHandler")
+        
+        # イベントハンドラーの初期化
+        self.event_handler = EventHandler(self.db, self, self.data_handler)
+        self.logger.debug("Tracking new object: EventHandler")
 
     def _setup_ui(self):
         """UIのセットアップ"""
-        self.logger.debug("Setting up UI")
-        try:
-            self.setWindowTitle("スキルマトリックス管理システム")
-            self.setMinimumSize(800, 600)
-            
-            central_widget = QWidget()
-            self.setCentralWidget(central_widget)
-            
-            layout = QHBoxLayout(central_widget)
-            layout.addWidget(self.left_pane, stretch=1)
-            layout.addWidget(self.right_pane, stretch=2)
-            
-            self._track_ref(central_widget)
-            self._track_ref(layout)
-            
-        except Exception as e:
-            self.logger.critical(f"Failed to setup UI: {e}\n{traceback.format_exc()}")
-            raise
+        # メインウィジェットの設定
+        main_widget = QWidget()
+        self.logger.debug("Tracking new object: QWidget")
+        
+        # レイアウトの設定
+        layout = QHBoxLayout()
+        self.logger.debug("Tracking new object: QHBoxLayout")
+        
+        # ウィジェットの配置
+        layout.addWidget(self.left_pane)
+        layout.addWidget(self.right_pane)
+        
+        # レイアウトの適用
+        main_widget.setLayout(layout)
+        self.setCentralWidget(main_widget)
+        
+        # ウィンドウの設定
+        self.setWindowTitle("スキルマトリクス管理")
+        self.setGeometry(100, 100, 800, 600)
 
     def _connect_signals(self):
         """シグナルの接続"""
-        self.logger.debug("Connecting signals")
-        try:
-            # グループ変更
-            self.left_pane.group_changed.connect(self._on_group_changed)
-            
-            # ユーザー操作
-            self.left_pane.add_user_clicked.connect(self.event_handler.add_user)
-            self.left_pane.edit_user_clicked.connect(self.event_handler.edit_user)
-            self.left_pane.delete_user_clicked.connect(self.event_handler.delete_user)
-            
-            # データ更新
-            self.data_changed.connect(self.data_handler.refresh_data)
-            
-            # ユーザー削除
-            self.user_deleted.connect(self._on_user_deleted)
-            
-            self.logger.debug("Signal connections completed")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to connect signals: {e}\n{traceback.format_exc()}")
+        # 左ペインのシグナル接続
+        self.left_pane.connect_signals(self.event_handler)
+        
+        # 右ペインのシグナル接続
+        self.right_pane.connect_signals(self.event_handler)
 
     def _safe_initial_load(self):
-        """安全な初期データ読み込み"""
-        self.logger.debug("Starting safe initial load")
+        """初期データの安全な読み込み"""
         try:
             self.data_handler.load_initial_data()
         except Exception as e:
-            self.logger.error(f"Error in initial load: {e}\n{traceback.format_exc()}")
-            QMessageBox.critical(self, "エラー", "初期データの読み込みに失敗しました")
-
-    def _track_ref(self, obj):
-        """オブジェクト参照の追跡"""
-        self._debug_refs.add(obj)
-        self.logger.debug(f"Tracking new object: {obj.__class__.__name__}")
-
-    def _on_group_changed(self, index):
-        """グループ変更時の処理"""
-        self.logger.debug(f"Group changed to index: {index}")
-        try:
-            if index >= 0:
-                group_id = self.left_pane.group_combo.itemData(index)
-                self.data_handler._last_group_id = group_id
-                QTimer.singleShot(0, self.data_handler.refresh_user_list)
-        except Exception as e:
-            self.logger.error(f"Error handling group change: {e}", exc_info=True)
-
-    def _on_user_deleted(self, user_id):
-        """ユーザー削除後の処理"""
-        self.logger.debug(f"User deleted: {user_id}")
-        try:
-            self.data_handler.refresh_data()
-        except Exception as e:
-            self.logger.error(f"Error handling user deletion: {e}", exc_info=True)
-
-    def _exception_hook(self, exc_type, exc_value, exc_traceback):
-        """未捕捉の例外をログに記録"""
-        self.logger.critical(
-            "Uncaught exception:",
-            exc_info=(exc_type, exc_value, exc_traceback)
-        )
+            self.logger.error(f"初期データ読み込みエラー: {e}")
+            raise
 
     def closeEvent(self, event):
-        """ウィンドウを閉じる際の処理"""
-        self.logger.debug("Processing window close event")
-        try:
-            # クリーンアップ
-            self._cleanup()
-            self.window_closed.emit()
-            self.logger.debug("Window closed signal emitted")
-        except Exception as e:
-            self.logger.error(f"Error in close event: {e}\n{traceback.format_exc()}")
-        finally:
-            event.accept()
-
-    def _cleanup(self):
-        """リソースのクリーンアップ"""
-        self.logger.debug("Starting cleanup")
+        """終了時の処理"""
         try:
             # データハンドラーのクリーンアップ
             if hasattr(self, 'data_handler'):
@@ -166,10 +121,10 @@ class MainWindow(QMainWindow):
             # イベントハンドラーのクリーンアップ
             if hasattr(self, 'event_handler'):
                 self.event_handler.cleanup()
+                
+            # 基底クラスの処理
+            super().closeEvent(event)
             
-            # 参照の解放
-            self._debug_refs.clear()
-            
-            self.logger.debug("Cleanup completed")
         except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}\n{traceback.format_exc()}")
+            self.logger.error(f"終了処理エラー: {e}")
+            event.accept()
