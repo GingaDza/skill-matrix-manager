@@ -27,3 +27,4 @@ Thumbs.db
 # Backup files
 archive/
 *_backup_*/
+logs/

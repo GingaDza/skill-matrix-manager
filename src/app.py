@@ -2,7 +2,7 @@
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QtMsgType
 from .utils.memory_profiler import MemoryProfiler
-from .utils.type_manager import TypeManager
+from .utils.log_config import memory_loggerfrom .utils.type_manager import TypeManager
 import logging
 import sys
 import psutil
@@ -15,7 +15,8 @@ class SkillMatrixApp(QApplication):
     """スキルマトリックスアプリケーション"""
     
     def __init__(self, argv):
-        super().__init__(argv)
+        # デバッグモードの設定
+        memory_logger.set_debug_mode(False)  # 通常モードではFalse        super().__init__(argv)
         
         # ロガーの設定
         self.logger = logging.getLogger(__name__)
