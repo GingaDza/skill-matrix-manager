@@ -1,5 +1,8 @@
 from PyQt6.QtWidgets import QMessageBox, QListWidgetItem
-from PyQt6.QtCore import QObject, Qt, QTimer, QMetaObject, QCoreApplication, QThread
+from PyQt6.QtCore import (
+    QObject, Qt, QTimer, QThread, QMetaObject,
+    QCoreApplication, pyqtSignal, pyqtSlot
+)
 import logging
 import traceback
 from typing import Optional, Dict, Any, List, Tuple
@@ -8,15 +11,34 @@ import json
 import os
 import gc
 import sys
+import weakref
 from datetime import datetime
+from functools import partial
+
+class UpdateWorker(QThread):
+    """非同期更新処理を行うワーカー"""
+    update_completed = pyqtSignal(list, list)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, db, group_id=None):
+        super().__init__()
+        self.db = db
+        self.group_id = group_id
+
+    def run(self):
+        try:
+            groups = self.db.get_all_groups()
+            users = []
+            if self.group_id is not None:
+                users = self.db.get_users_by_group(self.group_id)
+            self.update_completed.emit(groups, users)
+        except Exception as e:
+            self.error_occurred.emit(str(e))
 
 class DataHandler(QObject):
     """データ操作を管理するハンドラー"""
-    # メモリ制限をより厳格に設定
-    MAX_MEMORY_RSS_MB = 150
-    MAX_MEMORY_VMS_MB = 400
-    CLEANUP_THRESHOLD_MB = 100
-    UPDATE_INTERVAL_MS = 250  # 更新間隔を延長
+    update_started = pyqtSignal()
+    update_finished = pyqtSignal()
 
     def __init__(self, db, main_window):
         super().__init__()
@@ -28,30 +50,36 @@ class DataHandler(QObject):
         self.is_updating = False
         
         # メモリ管理
+        self._cache = {}
+        self._workers = []
         self._update_count = 0
-        self._last_cleanup = datetime.now()
+        self._last_cleanup_time = datetime.now()
         
         # 状態管理
         self._last_group_id = None
         self._last_user_id = None
-        self._update_depth = 0
-        self._cache = {}
+        self._pending_updates = 0
         
-        # 更新管理
+        # タイマー設定
         self._setup_timers()
         self._setup_debug()
 
     def _setup_timers(self):
         """タイマーの初期化"""
-        # 更新タイマー
-        self._update_timer = QTimer()
+        # 更新スケジューラ
+        self._update_timer = QTimer(self)
         self._update_timer.setSingleShot(True)
-        self._update_timer.timeout.connect(self._safe_process_update)
+        self._update_timer.timeout.connect(self._process_update)
         
-        # メモリチェックタイマー
-        self._memory_timer = QTimer()
+        # メモリ監視
+        self._memory_timer = QTimer(self)
         self._memory_timer.timeout.connect(self._check_memory)
-        self._memory_timer.start(3000)  # 3秒ごとにチェック
+        self._memory_timer.start(2000)  # 2秒ごとにチェック
+        
+        # 自動クリーンアップ
+        self._cleanup_timer = QTimer(self)
+        self._cleanup_timer.timeout.connect(self._auto_cleanup)
+        self._cleanup_timer.start(5000)  # 5秒ごとにクリーンアップ
 
     def _setup_debug(self):
         """デバッグ環境の設定"""
@@ -64,157 +92,134 @@ class DataHandler(QObject):
             encoding='utf-8'
         )
         handler.setFormatter(logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s'
+            '%(asctime)s - %(levelname)s - [%(threadName)s] %(message)s'
         ))
         self.logger.addHandler(handler)
         
         self._initial_memory = self._get_memory_usage()
-        self._log_state("初期化完了")
+        self._log_state("初期化")
 
     def _get_memory_usage(self) -> Dict[str, float]:
         """メモリ使用状況の取得"""
         try:
             process = psutil.Process()
-            memory_info = process.memory_info()
+            info = process.memory_info()
             return {
-                'rss': memory_info.rss / (1024 * 1024),
-                'vms': memory_info.vms / (1024 * 1024)
+                'rss': info.rss / (1024 * 1024),
+                'vms': info.vms / (1024 * 1024)
             }
         except Exception as e:
             self.logger.error(f"メモリ情報取得エラー: {e}")
             return {'rss': 0.0, 'vms': 0.0}
 
     def _log_state(self, action: str):
-        """現在の状態をログに記録"""
+        """状態のログ記録"""
         try:
-            current = self._get_memory_usage()
-            diff = {k: current[k] - self._initial_memory[k] for k in current}
+            mem = self._get_memory_usage()
+            diff = {k: mem[k] - self._initial_memory[k] for k in mem}
             
             self.logger.debug(
                 f"State ({action}):\n"
-                f"  メモリ RSS: {current['rss']:.1f}MB (変化: {diff['rss']:+.1f}MB)\n"
-                f"  メモリ VMS: {current['vms']:.1f}MB (変化: {diff['vms']:+.1f}MB)\n"
-                f"  更新回数: {self._update_count}\n"
-                f"  キャッシュサイズ: {len(self._cache)}\n"
-                f"  更新深度: {self._update_depth}"
+                f"  RSS: {mem['rss']:.1f}MB (Δ{diff['rss']:+.1f}MB)\n"
+                f"  VMS: {mem['vms']:.1f}MB (Δ{diff['vms']:+.1f}MB)\n"
+                f"  Workers: {len(self._workers)}\n"
+                f"  Cache: {len(self._cache)}\n"
+                f"  Updates: {self._update_count}"
             )
         except Exception as e:
             self.logger.error(f"状態ログ記録エラー: {e}")
 
     def _check_memory(self):
-        """メモリ使用状況のチェックと対応"""
+        """メモリ使用状況のチェック"""
         try:
-            current = self._get_memory_usage()
-            
-            if (current['rss'] > self.MAX_MEMORY_RSS_MB or
-                current['vms'] > self.MAX_MEMORY_VMS_MB):
-                self.logger.warning("メモリ使用量超過")
-                self._emergency_cleanup()
-                
-            elif current['rss'] > self.CLEANUP_THRESHOLD_MB:
-                self.logger.info("メモリ使用量警告")
-                self._cleanup_cache()
-                
+            mem = self._get_memory_usage()
+            if mem['rss'] > 150:  # 150MB超過で緊急クリーンアップ
+                self._force_cleanup()
         except Exception as e:
             self.logger.error(f"メモリチェックエラー: {e}")
 
-    def _emergency_cleanup(self):
-        """緊急メモリクリーンアップ"""
+    def _force_cleanup(self):
+        """強制メモリクリーンアップ"""
         try:
-            self.logger.info("緊急クリーンアップ開始")
+            self.logger.info("強制クリーンアップ開始")
             
             # キャッシュクリア
             self._cache.clear()
             
-            # 明示的なガベージコレクション
+            # 完了した非同期処理のクリーンアップ
+            self._workers = [w for w in self._workers if w.isRunning()]
+            
+            # 明示的なGC
             gc.collect()
             
-            # システムメモリの解放要求
-            if hasattr(sys, 'set_asyncgen_hooks'):
-                sys.set_asyncgen_hooks(None, None)
-            
-            self._log_state("緊急クリーンアップ完了")
+            self._log_state("強制クリーンアップ完了")
             
         except Exception as e:
-            self.logger.error(f"緊急クリーンアップエラー: {e}")
+            self.logger.error(f"強制クリーンアップエラー: {e}")
 
-    def _cleanup_cache(self):
-        """通常のキャッシュクリーンアップ"""
+    def _auto_cleanup(self):
+        """定期的なクリーンアップ"""
         try:
-            self._cache.clear()
+            # 完了したワーカーの削除
+            self._workers = [w for w in self._workers if w.isRunning()]
+            
+            # 古いキャッシュの削除
+            if len(self._cache) > 100:
+                self._cache.clear()
+                
             gc.collect()
-            self._log_state("キャッシュクリーンアップ完了")
-        except Exception as e:
-            self.logger.error(f"キャッシュクリーンアップエラー: {e}")
-
-    def schedule_update(self, immediate: bool = False):
-        """更新のスケジュール"""
-        try:
-            if self._update_depth > 3:  # 深度制限を厳格化
-                self.logger.warning("更新深度制限超過")
-                return
-            
-            interval = 0 if immediate else self.UPDATE_INTERVAL_MS
-            self._update_timer.start(interval)
-            self._log_state("更新スケジュール")
             
         except Exception as e:
-            self.logger.error(f"更新スケジュールエラー: {e}")
+            self.logger.error(f"自動クリーンアップエラー: {e}")
 
-    def _safe_process_update(self):
-        """安全な更新処理の実行"""
+    @pyqtSlot()
+    def _process_update(self):
+        """更新処理の実行"""
         if self.is_updating:
             return
 
         try:
             self.is_updating = True
-            self._update_count += 1
-            self._update_depth += 1
+            self.update_started.emit()
             
-            # メモリチェック
-            self._check_memory()
+            worker = UpdateWorker(self.db, self._last_group_id)
+            worker.update_completed.connect(self._handle_update_completed)
+            worker.error_occurred.connect(self._handle_update_error)
+            worker.finished.connect(worker.deleteLater)
             
-            # UI更新
-            if self._main_window and hasattr(self._main_window, 'left_pane'):
-                self._update_ui()
-            
-            self._log_state("更新完了")
+            self._workers.append(worker)
+            worker.start()
             
         except Exception as e:
             self.logger.error(f"更新処理エラー: {e}")
-            self._show_error("データ更新エラー")
-        finally:
-            self._update_depth -= 1
             self.is_updating = False
+            self._show_error("データ更新エラー")
 
-    def _update_ui(self):
-        """UI要素の更新"""
+    @pyqtSlot(list, list)
+    def _handle_update_completed(self, groups, users):
+        """更新完了時の処理"""
         try:
+            if not self._main_window:
+                return
+
             left_pane = self._main_window.left_pane
             
             # グループ更新
-            groups = self.db.get_all_groups()
-            current_group_id = self._last_group_id or left_pane.get_current_group_id()
-            
             left_pane.group_combo.blockSignals(True)
             try:
                 left_pane.group_combo.clear()
                 for group_id, group_name in groups:
                     left_pane.group_combo.addItem(group_name, group_id)
-                
-                if current_group_id:
-                    index = left_pane.group_combo.findData(current_group_id)
+                    
+                if self._last_group_id:
+                    index = left_pane.group_combo.findData(self._last_group_id)
                     if index >= 0:
                         left_pane.group_combo.setCurrentIndex(index)
-                        self._last_group_id = current_group_id
             finally:
                 left_pane.group_combo.blockSignals(False)
-            
+
             # ユーザー更新
-            if self._last_group_id:
-                users = self.db.get_users_by_group(self._last_group_id)
-                current_row = left_pane.user_list.currentRow()
-                
+            if users:
                 left_pane.user_list.blockSignals(True)
                 try:
                     left_pane.user_list.clear()
@@ -222,17 +227,24 @@ class DataHandler(QObject):
                         item = QListWidgetItem(user_name)
                         item.setData(Qt.ItemDataRole.UserRole, user_id)
                         left_pane.user_list.addItem(item)
-                    
-                    if 0 <= current_row < left_pane.user_list.count():
-                        left_pane.user_list.setCurrentRow(current_row)
                 finally:
                     left_pane.user_list.blockSignals(False)
-            
+                    
             left_pane.update_button_states()
             
         except Exception as e:
-            self.logger.error(f"UI更新エラー: {e}")
-            raise
+            self.logger.error(f"更新完了処理エラー: {e}")
+        finally:
+            self.is_updating = False
+            self.update_finished.emit()
+            self._log_state("更新完了")
+
+    @pyqtSlot(str)
+    def _handle_update_error(self, error_msg):
+        """更新エラー時の処理"""
+        self.logger.error(f"更新エラー: {error_msg}")
+        self.is_updating = False
+        self._show_error(f"データ更新エラー: {error_msg}")
 
     def _show_error(self, message: str):
         """エラーメッセージの表示"""
@@ -241,23 +253,41 @@ class DataHandler(QObject):
         except Exception as e:
             self.logger.error(f"エラー表示失敗: {e}")
 
+    def schedule_update(self, immediate: bool = False):
+        """更新のスケジュール"""
+        try:
+            if not immediate and self.is_updating:
+                return
+                
+            interval = 0 if immediate else 250
+            self._update_timer.start(interval)
+            self._log_state("更新スケジュール")
+            
+        except Exception as e:
+            self.logger.error(f"更新スケジュールエラー: {e}")
+
     def cleanup(self):
         """終了時のクリーンアップ"""
         try:
             self._log_state("終了処理開始")
             
             # タイマーの停止
-            self._update_timer.stop()
-            self._memory_timer.stop()
+            for timer in [self._update_timer, self._memory_timer, self._cleanup_timer]:
+                timer.stop()
+                timer.deleteLater()
             
-            # リソースの解放
+            # ワーカーの停止
+            for worker in self._workers:
+                worker.quit()
+                worker.wait()
+                worker.deleteLater()
+            
+            self._workers.clear()
             self._cache.clear()
             self._main_window = None
             self.db = None
             
-            # 最終クリーンアップ
             gc.collect()
-            
             self._log_state("終了処理完了")
             
         except Exception as e:
@@ -277,4 +307,4 @@ class DataHandler(QObject):
         """ユーザーリストの更新をリクエスト"""
         self.logger.debug("ユーザーリスト更新リクエスト受信")
         if not self.is_updating and self._last_group_id:
-            self._update_ui()
+            self.schedule_update()
