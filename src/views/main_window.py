@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QListWidget, QListWidgetItem, QLabel,
     QMessageBox, QInputDialog, QComboBox, QTabWidget
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QMetaObject, Qt
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from ..database.database_manager import DatabaseManager
 import logging
 import traceback
@@ -28,11 +28,16 @@ class MainWindow(QMainWindow):
         self.current_group_id = None
         self.is_updating = False
         
+        # 更新用タイマー
+        self.update_timer = QTimer(self)
+        self.update_timer.setSingleShot(True)
+        self.update_timer.timeout.connect(self._load_initial_data)
+        
         # UIの設定
         self._create_ui()
         
         # 初期データの遅延読み込み
-        QMetaObject.invokeMethod(self, "_load_initial_data", Qt.ConnectionType.QueuedConnection)
+        self.update_timer.start(0)
 
     def _create_ui(self):
         """UIの作成"""
@@ -121,6 +126,10 @@ class MainWindow(QMainWindow):
         finally:
             self.is_updating = False
 
+    def _schedule_update(self):
+        """更新のスケジュール"""
+        self.update_timer.start(100)
+
     def _on_group_changed(self, index):
         """グループ変更時の処理"""
         if self.is_updating:
@@ -177,11 +186,7 @@ class MainWindow(QMainWindow):
                 self.is_updating = True
                 user_id = self.db.add_user(name.strip(), self.current_group_id)
                 if user_id:
-                    QMetaObject.invokeMethod(
-                        self,
-                        "_refresh_user_list",
-                        Qt.ConnectionType.QueuedConnection
-                    )
+                    self._schedule_update()
                     QMessageBox.information(self, "成功", f"ユーザー '{name}' を追加しました")
                 else:
                     QMessageBox.warning(self, "警告", "ユーザーの追加に失敗しました")
@@ -214,11 +219,7 @@ class MainWindow(QMainWindow):
             if ok and new_name.strip():
                 self.is_updating = True
                 if self.db.edit_user(user_id, new_name.strip()):
-                    QMetaObject.invokeMethod(
-                        self,
-                        "_refresh_user_list",
-                        Qt.ConnectionType.QueuedConnection
-                    )
+                    self._schedule_update()
                     QMessageBox.information(self, "成功", f"ユーザー名を '{new_name}' に変更しました")
                 else:
                     QMessageBox.warning(self, "警告", "ユーザーの編集に失敗しました")
@@ -252,11 +253,7 @@ class MainWindow(QMainWindow):
             if reply == QMessageBox.StandardButton.Yes:
                 self.is_updating = True
                 if self.db.delete_user(user_id):
-                    QMetaObject.invokeMethod(
-                        self,
-                        "_refresh_user_list",
-                        Qt.ConnectionType.QueuedConnection
-                    )
+                    self._schedule_update()
                     QMessageBox.information(self, "成功", f"ユーザー '{user_name}' を削除しました")
                 else:
                     QMessageBox.warning(self, "警告", "ユーザーの削除に失敗しました")
