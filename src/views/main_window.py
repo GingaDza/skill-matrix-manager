@@ -59,6 +59,11 @@ class MainWindow(QMainWindow):
         self.edit_user_btn = QPushButton("編集")
         self.delete_user_btn = QPushButton("削除")
         
+        # ボタンの接続
+        self.add_user_btn.clicked.connect(self.on_add_user)
+        self.edit_user_btn.clicked.connect(self.on_edit_user)
+        self.delete_user_btn.clicked.connect(self.on_delete_user)
+        
         button_layout.addWidget(self.add_user_btn)
         button_layout.addWidget(self.edit_user_btn)
         button_layout.addWidget(self.delete_user_btn)
@@ -100,6 +105,45 @@ class MainWindow(QMainWindow):
         
         # 初期データのロード
         self.load_initial_data()
+
+    def on_group_changed(self, index):
+        """グループ選択時の処理"""
+        if index >= 0:
+            group_id = self.group_combo.currentData()
+            self.load_users_for_group(group_id)
+
+    def load_users_for_group(self, group_id):
+        """グループのユーザー一覧を読み込み"""
+        self.user_list.clear()
+        users = self.db.get_users_by_group(group_id)
+        for user in users:
+            self.user_list.addItem(user[1])  # user[1] は name
+
+    def on_user_selected(self):
+        """ユーザー選択時の処理"""
+        selected_items = self.user_list.selectedItems()
+        if selected_items:
+            user_name = selected_items[0].text()
+            self.update_category_tabs(user_name)
+
+    def on_add_user(self):
+        """ユーザー追加ダイアログを表示"""
+        pass  # システム管理タブの初期設定で実装
+
+    def on_edit_user(self):
+        """ユーザー編集ダイアログを表示"""
+        pass  # システム管理タブの初期設定で実装
+
+    def on_delete_user(self):
+        """ユーザー削除の確認と実行"""
+        pass  # システム管理タブの初期設定で実装
+
+    def update_category_tabs(self, user_name):
+        """カテゴリータブの内容を更新"""
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if isinstance(tab, CategoryTab):
+                tab.update_user_data(user_name)
 
     def load_initial_data(self):
         """初期データのロード"""
