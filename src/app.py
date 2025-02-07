@@ -1,80 +1,153 @@
-import sys
+"""アプリケーションメインモジュール"""
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt, QtMsgType
+from .utils.memory_profiler import MemoryProfiler
 import logging
-from .utils.memory_profiler import MemoryProfilerfrom PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt, QLocale, QTimer
-import platform
+import sys
+import psutil
+import gc
+from typing import Optional
 from .views.main_window import MainWindow
+from .database.database_manager import DatabaseManager
 
-class App(QApplication):
-    """アプリケーションのメインクラス"""
+class SkillMatrixApp(QApplication):
+    """スキルマトリックスアプリケーション"""
+    
     def __init__(self, argv):
-        self._profiler = MemoryProfiler()
-        self._profiler.take_snapshot()  # ベースラインの取得        self.logger = logging.getLogger(__name__)
+        super().__init__(argv)
+        
+        # ロガーの設定
+        self.logger = logging.getLogger(__name__)
         self.logger.debug("Starting App initialization")
         
-        # macOS特有の設定
-        if platform.system() == 'Darwin':
-            self.logger.debug("Configuring macOS specific settings")
-            # IMKClientのエラーを防ぐ
-            argv += ['-platformpluginpath', '/usr/local/Frameworks/QtPlugins/platforms']
-            
-        super().__init__(argv)
+        # メモリプロファイラーの初期化
+        self._profiler = MemoryProfiler()
+        self._profiler.take_snapshot()
+        
+        # macOS固有の設定
+        self._configure_macos()
         self.logger.debug("App parent initialization complete")
         
-        # アプリケーション全体の設定
+        # アプリケーション設定
         self._configure_application()
+        self.logger.debug("Application configuration complete")
         
-        # メインウィンドウ
-        self.main_window = None
-        self.exit_timer = QTimer()
-        self.exit_timer.setSingleShot(True)
-        self.exit_timer.timeout.connect(self.quit)
+        # メインウィンドウの初期化
+        self.logger.debug("Starting application main window")
+        self._init_main_window()
+
+    def _configure_macos(self):
+        """macOS固有の設定"""
+        try:
+            if sys.platform == 'darwin':
+                self.logger.debug("Configuring macOS specific settings")
+                self.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
+                self.setAttribute(Qt.ApplicationAttribute.AA_MacDontSwapCtrlAndMeta)
+                self.setAttribute(Qt.ApplicationAttribute.AA_DisableWindowContextHelpButton)
+        except Exception as e:
+            self.logger.error(f"macOS設定エラー: {e}")
 
     def _configure_application(self):
-        """アプリケーション全体の設定"""
-        self.logger.debug("Configuring application settings")
+        """アプリケーションの設定"""
         try:
-            # プラットフォーム固有の設定
-            if platform.system() == 'Darwin':
-                self.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus)
-                self.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
-                
-            # 共通設定
-            self.setApplicationName("スキルマトリックス管理システム")
-            self.setApplicationVersion("1.0.0")
-            self.setStyle("Fusion")
+            # アプリケーション全体の設定
+            self.setQuitOnLastWindowClosed(True)
+            self.setStyle('Fusion')
             
-            # ロケールの設定
-            QLocale.setDefault(QLocale(QLocale.Language.Japanese, QLocale.Country.Japan))
+            # イベントフィルターのインストール
+            self.installEventFilter(self)
+            
+            # GCの設定
+            gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
+            gc.set_threshold(700, 10, 5)
             
             self.logger.debug("Application configuration complete")
             
         except Exception as e:
-            self.logger.error(f"Error configuring application: {e}", exc_info=True)
+            self.logger.error(f"アプリケーション設定エラー: {e}")
+
+    def _init_main_window(self):
+        """メインウィンドウの初期化"""
+        try:
+            self._db = DatabaseManager()
+            self._main_window = MainWindow(self._db)
+            self._main_window.show()
+            
+        except Exception as e:
+            self.logger.error(f"メインウィンドウ初期化エラー: {e}")
             raise
 
-    def start(self):
-        """アプリケーションの起動"""
+    def notify(self, receiver, event) -> bool:
+        """イベント通知のオーバーライド"""
         try:
-            self.logger.debug("Starting application main window")
-            self.main_window = MainWindow()
-            self.main_window.show()
-            
-            # クリーンアップ設定
-            self.main_window.window_closed.connect(self._handle_window_close)
-            
-            return self.exec()
-            
+            return super().notify(receiver, event)
         except Exception as e:
-            self.logger.error(f"Error starting application: {e}", exc_info=True)
-            return 1
+            self.logger.error(f"イベント通知エラー: {e}")
+            return False
 
-    def _handle_window_close(self):
-        """メインウィンドウが閉じられた時の処理"""
-        self.logger.debug("Handling window close")
+    def event(self, event) -> bool:
+        """イベントフィルター"""
         try:
-            # 遅延終了で残りのイベントを処理
-            self.exit_timer.start(100)
+            # メモリ使用量の監視
+            if event.type() == Qt.ApplicationAttribute.AA_EnableHighDpiScaling:
+                process = psutil.Process()
+                mem = process.memory_full_info()
+                rss_mb = mem.rss / (1024 * 1024)
+                vms_mb = mem.vms / (1024 * 1024)
+                
+                if vms_mb > 512:  # 512MB以上
+                    self.logger.warning(f"高メモリ使用量: VMS {vms_mb:.1f}MB")
+                    gc.collect()
+            
+            return super().event(event)
+            
         except Exception as e:
-            self.logger.error(f"Error handling window close: {e}", exc_info=True)
-            self.quit()
+            self.logger.error(f"イベントフィルターエラー: {e}")
+            return False
+
+    def handle_message(self, msg_type: QtMsgType, msg: str):
+        """メッセージハンドリング"""
+        try:
+            if msg_type == QtMsgType.QtDebugMsg:
+                self.logger.debug(msg)
+            elif msg_type == QtMsgType.QtInfoMsg:
+                self.logger.info(msg)
+            elif msg_type == QtMsgType.QtWarningMsg:
+                self.logger.warning(msg)
+            elif msg_type == QtMsgType.QtCriticalMsg:
+                self.logger.error(msg)
+            elif msg_type == QtMsgType.QtFatalMsg:
+                self.logger.critical(msg)
+                
+        except Exception as e:
+            self.logger.error(f"メッセージハンドリングエラー: {e}")
+
+    def cleanup(self):
+        """アプリケーションのクリーンアップ"""
+        try:
+            # メモリリークの検出
+            leaks = self._profiler.find_memory_leaks()
+            if leaks:
+                self.logger.warning("メモリリーク検出:")
+                for leak in leaks:
+                    self.logger.warning(f"  {leak}")
+            
+            # プロファイラーのクリーンアップ
+            self._profiler.cleanup()
+            
+            # 最終的なガベージコレクション
+            gc.collect()
+            
+        except Exception as e:
+            self.logger.error(f"クリーンアップエラー: {e}")
+
+def App(argv=None) -> Optional[SkillMatrixApp]:
+    """アプリケーションインスタンスの取得"""
+    if argv is None:
+        argv = sys.argv
+        
+    try:
+        return SkillMatrixApp(argv)
+    except Exception as e:
+        logging.error(f"アプリケーション初期化エラー: {e}")
+        return None
