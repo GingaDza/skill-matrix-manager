@@ -16,8 +16,8 @@ class App(QApplication):
             # Input Method対策
             self.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar)
             self.setAttribute(Qt.ApplicationAttribute.AA_DontShowIconsInMenus)
-            # フォーカス関連の設定
-            self.setAttribute(Qt.ApplicationAttribute.AA_MacPluginApplication)
+            # プラグインアプリケーション設定
+            self.setAttribute(Qt.ApplicationAttribute.AA_PluginApplication)
         
         # アプリケーション情報
         self.setApplicationName("スキルマトリックス管理システム")
