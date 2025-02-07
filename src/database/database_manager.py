@@ -16,7 +16,7 @@ class DatabaseManager:
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
         self.current_user = "GingaDza"
-        self.current_time = "2025-02-07 13:53:57"
+        self.current_time = "2025-02-07 13:55:38"
         self.initialize_database()
 
     def initialize_database(self):
