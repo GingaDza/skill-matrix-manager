@@ -1,230 +1,245 @@
-from PyQt6.QtWidgets import QMessageBox, QInputDialog, QDialog
-from PyQt6.QtCore import QObject, Qt
+from PyQt6.QtCore import QObject, Qt, pyqtSlot
+from PyQt6.QtWidgets import QMessageBox, QInputDialog
 import logging
-import traceback
+import weakref
 from typing import Optional
 
-class EventHandler(QObject):
-    """イベント処理を管理するハンドラー"""
-    def __init__(self, db, main_window):
-        super().__init__()
+class SafeHandler:
+    """安全なイベントハンドラーベース"""
+    def __init__(self, db, main_window, data_handler):
         self.logger = logging.getLogger(__name__)
-        self.db = db
-        # メインウィンドウを直接参照
-        self._main_window = main_window
+        self._db_ref = weakref.proxy(db)
+        self._main_window_ref = weakref.proxy(main_window)
+        self._data_handler_ref = weakref.proxy(data_handler)
+        
+    @property
+    def db(self):
+        """データベース参照の取得"""
+        try:
+            return self._db_ref
+        except ReferenceError:
+            self.logger.error("データベース参照が失われました")
+            return None
+            
+    @property
+    def main_window(self):
+        """メインウィンドウ参照の取得"""
+        try:
+            return self._main_window_ref
+        except ReferenceError:
+            self.logger.error("メインウィンドウ参照が失われました")
+            return None
+            
+    @property
+    def data_handler(self):
+        """データハンドラー参照の取得"""
+        try:
+            return self._data_handler_ref
+        except ReferenceError:
+            self.logger.error("データハンドラー参照が失われました")
+            return None
 
     def cleanup(self):
         """リソースのクリーンアップ"""
-        self.logger.debug("Cleaning up EventHandler")
-        try:
-            self._main_window = None
-            self.db = None
-        except Exception as e:
-            self.logger.error(f"Error during EventHandler cleanup: {e}", exc_info=True)
+        self._db_ref = None
+        self._main_window_ref = None
+        self._data_handler_ref = None
 
-    def _show_dialog(self, dialog_type: str, title: str, message: str,
-                    default_text: str = "", buttons: QMessageBox.StandardButton = QMessageBox.StandardButton.Ok,
-                    default_button: QMessageBox.StandardButton = QMessageBox.StandardButton.NoButton) -> tuple[Optional[str], bool]:
-        """ダイアログを表示する汎用メソッド"""
-        try:
-            if dialog_type == "input":
-                result = QInputDialog.getText(
-                    self._main_window,
-                    title,
-                    message,
-                    text=default_text
-                )
-                return result
-            elif dialog_type == "question":
-                result = QMessageBox.question(
-                    self._main_window,
-                    title,
-                    message,
-                    buttons,
-                    default_button
-                )
-                return str(result), result == QMessageBox.StandardButton.Yes
-            elif dialog_type == "error":
-                QMessageBox.critical(
-                    self._main_window,
-                    title,
-                    message
-                )
-                return None, False
-            elif dialog_type == "warning":
-                QMessageBox.warning(
-                    self._main_window,
-                    title,
-                    message
-                )
-                return None, False
-            elif dialog_type == "info":
-                QMessageBox.information(
-                    self._main_window,
-                    title,
-                    message
-                )
-                return None, False
-        except Exception as e:
-            self.logger.error(f"Dialog error: {e}", exc_info=True)
-            return None, False
+class EventHandler(QObject, SafeHandler):
+    """イベント処理ハンドラー"""
+    
+    def __init__(self, db, main_window, data_handler):
+        QObject.__init__(self)
+        SafeHandler.__init__(self, db, main_window, data_handler)
+        self.logger.setLevel(logging.DEBUG)
 
-    def on_group_changed(self, index):
-        """グループ変更時の処理"""
-        self.logger.debug(f"Group changed to index {index}")
-        if index >= 0 and self._main_window:
-            try:
-                self._main_window.data_handler.refresh_user_list()
-            except Exception as e:
-                self.logger.error(f"Error handling group change: {e}", exc_info=True)
-                self._show_dialog("error", "エラー", "グループの変更中にエラーが発生しました")
-
-    def add_user(self):
-        """ユーザー追加"""
+    @pyqtSlot()
+    def on_add_user(self):
+        """ユーザー追加処理"""
         self.logger.debug("Starting user addition")
+        
         try:
-            left_pane = self._main_window.left_pane
-            group_id = left_pane.get_current_group_id()
-
+            window = self.main_window
+            if not window:
+                return
+                
+            left_pane = window.left_pane
+            group_id = left_pane.get_selected_group_id()
+            
             if group_id is None:
                 self.logger.warning("No group selected for user addition")
-                self._show_dialog("warning", "警告", "グループを選択してください")
+                QMessageBox.warning(
+                    window,
+                    "警告",
+                    "グループを選択してください。"
+                )
                 return
-
-            name, ok = self._show_dialog(
-                "input",
+                
+            name, ok = QInputDialog.getText(
+                window,
                 "ユーザー追加",
-                "ユーザー名を入力してください:"
+                "ユーザー名を入力してください："
             )
-
-            if ok and name and name.strip():
+            
+            if ok and name.strip():
                 self.logger.debug(f"Adding user '{name}' to group {group_id}")
-                if self.db.add_user(name.strip(), group_id):
-                    self.logger.info(f"Successfully added user '{name}'")
-                    self._main_window.data_changed.emit()
-                    self._show_dialog(
-                        "info",
-                        "成功",
-                        f"ユーザー '{name}' を追加しました"
-                    )
-                else:
-                    self.logger.error("Failed to add user")
-                    self._show_dialog(
-                        "warning",
-                        "警告",
-                        "ユーザーの追加に失敗しました"
-                    )
-
+                self.db.add_user_to_group(name.strip(), group_id)
+                self.logger.info(f"Successfully added user '{name}'")
+                
+                if self.data_handler:
+                    self.data_handler.refresh_user_list()
+                    
         except Exception as e:
-            self.logger.error(f"Error adding user: {e}", exc_info=True)
-            self._show_dialog(
-                "error",
+            self.logger.error(f"Error adding user: {e}")
+            QMessageBox.critical(
+                None,
                 "エラー",
-                "ユーザーの追加中にエラーが発生しました"
+                "ユーザーの追加に失敗しました。"
             )
 
-    def edit_user(self):
-        """ユーザー編集"""
-        self.logger.debug("Starting user edit")
+    @pyqtSlot()
+    def on_remove_user(self):
+        """ユーザー削除処理"""
+        self.logger.debug("Starting user removal")
+        
         try:
-            left_pane = self._main_window.left_pane
-            current_item = left_pane.get_selected_user()
-
-            if not current_item:
-                self.logger.warning("No user selected for editing")
-                self._show_dialog(
-                    "warning",
+            window = self.main_window
+            if not window:
+                return
+                
+            left_pane = window.left_pane
+            user_id = left_pane.get_selected_user_id()
+            
+            if user_id is None:
+                self.logger.warning("No user selected for removal")
+                QMessageBox.warning(
+                    window,
                     "警告",
-                    "編集するユーザーを選択してください"
+                    "ユーザーを選択してください。"
                 )
                 return
-
-            user_id = current_item.data(Qt.ItemDataRole.UserRole)
-            current_name = current_item.text()
-
-            new_name, ok = self._show_dialog(
-                "input",
-                "ユーザー編集",
-                "新しいユーザー名を入力してください:",
-                current_name
-            )
-
-            if ok and new_name and new_name.strip():
-                self.logger.debug(f"Editing user {user_id} name to '{new_name}'")
-                if self.db.edit_user(user_id, new_name.strip()):
-                    self.logger.info(f"Successfully edited user {user_id}")
-                    self._main_window.data_changed.emit()
-                    self._show_dialog(
-                        "info",
-                        "成功",
-                        f"ユーザー名を '{new_name}' に変更しました"
-                    )
-                else:
-                    self.logger.error(f"Failed to edit user {user_id}")
-                    self._show_dialog(
-                        "warning",
-                        "警告",
-                        "ユーザーの編集に失敗しました"
-                    )
-
-        except Exception as e:
-            self.logger.error(f"Error editing user: {e}", exc_info=True)
-            self._show_dialog(
-                "error",
-                "エラー",
-                "ユーザーの編集中にエラーが発生しました"
-            )
-
-    def delete_user(self):
-        """ユーザー削除"""
-        self.logger.debug("Starting user deletion")
-        try:
-            left_pane = self._main_window.left_pane
-            current_item = left_pane.get_selected_user()
-
-            if not current_item:
-                self.logger.warning("No user selected for deletion")
-                self._show_dialog(
-                    "warning",
-                    "警告",
-                    "削除するユーザーを選択してください"
-                )
-                return
-
-            user_id = current_item.data(Qt.ItemDataRole.UserRole)
-            user_name = current_item.text()
-
-            _, ok = self._show_dialog(
-                "question",
+                
+            confirm = QMessageBox.question(
+                window,
                 "確認",
-                f"ユーザー '{user_name}' を削除してもよろしいですか？",
-                buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                default_button=QMessageBox.StandardButton.No
+                "選択したユーザーを削除しますか？",
+                QMessageBox.StandardButton.Yes | 
+                QMessageBox.StandardButton.No
+            )
+            
+            if confirm == QMessageBox.StandardButton.Yes:
+                self.logger.debug(f"Removing user {user_id}")
+                self.db.remove_user(user_id)
+                self.logger.info(f"Successfully removed user {user_id}")
+                
+                if self.data_handler:
+                    self.data_handler.refresh_user_list()
+                    
+        except Exception as e:
+            self.logger.error(f"Error removing user: {e}")
+            QMessageBox.critical(
+                None,
+                "エラー",
+                "ユーザーの削除に失敗しました。"
             )
 
-            if ok:
-                self.logger.debug(f"Deleting user {user_id}")
-                if self.db.delete_user(user_id):
-                    self.logger.info(f"Successfully deleted user {user_id}")
-                    self._main_window.user_deleted.emit(user_id)
-                    self._main_window.data_changed.emit()
-                    self._show_dialog(
-                        "info",
-                        "成功",
-                        f"ユーザー '{user_name}' を削除しました"
-                    )
-                else:
-                    self.logger.error(f"Failed to delete user {user_id}")
-                    self._show_dialog(
-                        "warning",
-                        "警告",
-                        "ユーザーの削除に失敗しました"
-                    )
-
+    @pyqtSlot()
+    def on_add_group(self):
+        """グループ追加処理"""
+        self.logger.debug("Starting group addition")
+        
+        try:
+            window = self.main_window
+            if not window:
+                return
+                
+            name, ok = QInputDialog.getText(
+                window,
+                "グループ追加",
+                "グループ名を入力してください："
+            )
+            
+            if ok and name.strip():
+                self.logger.debug(f"Adding group '{name}'")
+                self.db.add_group(name.strip())
+                self.logger.info(f"Successfully added group '{name}'")
+                
+                if self.data_handler:
+                    self.data_handler.refresh_data()
+                    
         except Exception as e:
-            self.logger.error(f"Error deleting user: {e}", exc_info=True)
-            self._show_dialog(
-                "error",
+            self.logger.error(f"Error adding group: {e}")
+            QMessageBox.critical(
+                None,
                 "エラー",
-                "ユーザーの削除中にエラーが発生しました"
+                "グループの追加に失敗しました。"
+            )
+
+    @pyqtSlot()
+    def on_remove_group(self):
+        """グループ削除処理"""
+        self.logger.debug("Starting group removal")
+        
+        try:
+            window = self.main_window
+            if not window:
+                return
+                
+            left_pane = window.left_pane
+            group_id = left_pane.get_selected_group_id()
+            
+            if group_id is None:
+                self.logger.warning("No group selected for removal")
+                QMessageBox.warning(
+                    window,
+                    "警告",
+                    "グループを選択してください。"
+                )
+                return
+                
+            confirm = QMessageBox.question(
+                window,
+                "確認",
+                "選択したグループを削除しますか？\n"
+                "※所属するユーザーも全て削除されます。",
+                QMessageBox.StandardButton.Yes | 
+                QMessageBox.StandardButton.No
+            )
+            
+            if confirm == QMessageBox.StandardButton.Yes:
+                self.logger.debug(f"Removing group {group_id}")
+                self.db.remove_group(group_id)
+                self.logger.info(f"Successfully removed group {group_id}")
+                
+                if self.data_handler:
+                    self.data_handler.refresh_data()
+                    
+        except Exception as e:
+            self.logger.error(f"Error removing group: {e}")
+            QMessageBox.critical(
+                None,
+                "エラー",
+                "グループの削除に失敗しました。"
+            )
+
+    @pyqtSlot(int)
+    def on_group_changed(self, index: int):
+        """グループ選択変更処理"""
+        self.logger.debug(f"Group selection changed to index {index}")
+        
+        try:
+            window = self.main_window
+            if not window:
+                return
+                
+            left_pane = window.left_pane
+            if self.data_handler:
+                self.data_handler.refresh_user_list()
+                
+        except Exception as e:
+            self.logger.error(f"Error handling group change: {e}")
+            QMessageBox.critical(
+                None,
+                "エラー",
+                "グループ変更の処理に失敗しました。"
             )
