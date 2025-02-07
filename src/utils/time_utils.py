@@ -4,20 +4,25 @@ class TimeProvider:
     """時間とユーザー情報の固定プロバイダー"""
     
     # 固定値の設定
-    FIXED_TIME = datetime(2025, 2, 7, 12, 11, 26)  # UTC
-    FIXED_USER = "GingaDza"
+    FIXED_TIME = datetime(2025, 2, 7, 12, 13, 1)  # UTC
+    _current_user = "GingaDza"  # デフォルトユーザー
 
-    @staticmethod
-    def get_current_time():
+    @classmethod
+    def set_current_user(cls, username):
+        """現在のユーザーを設定"""
+        cls._current_user = username
+
+    @classmethod
+    def get_current_user(cls):
+        """現在のユーザーを取得"""
+        return cls._current_user
+
+    @classmethod
+    def get_current_time(cls):
         """固定の現在時刻を取得"""
-        return TimeProvider.FIXED_TIME
+        return cls.FIXED_TIME
 
-    @staticmethod
-    def get_formatted_time():
+    @classmethod
+    def get_formatted_time(cls):
         """フォーマット済みの時刻文字列を取得"""
-        return TimeProvider.FIXED_TIME.strftime("%Y-%m-%d %H:%M:%S")
-
-    @staticmethod
-    def get_current_user():
-        """固定のユーザー名を取得"""
-        return TimeProvider.FIXED_USER
+        return cls.FIXED_TIME.strftime("%Y-%m-%d %H:%M:%S")
