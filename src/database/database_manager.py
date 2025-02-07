@@ -15,11 +15,11 @@ class DatabaseManager:
             
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
-        self.current_user = "GingaDza"
-        self.current_time = "2025-02-07 12:43:54"  # 時刻を更新
-        self.initialize_database()  # メソッド名を元に戻す
+        self.current_user = "GingaDza"  # 現在のユーザー
+        self.current_time = "2025-02-07 12:45:12"  # 現在時刻を更新
+        self.initialize_database()
 
-    def initialize_database(self):  # メソッド名を元に戻す
+    def initialize_database(self):
         """データベースの初期化"""
         self.logger.info("データベースの初期化を開始")
         try:
@@ -114,7 +114,78 @@ class DatabaseManager:
             self.conn.rollback()
             raise
 
-    # ... 他のメソッドは変更なし ...
+    def get_all_groups(self):
+        """全グループを取得"""
+        try:
+            self.cursor.execute('SELECT id, name FROM groups ORDER BY name')
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.logger.error(f"グループ取得中にエラーが発生: {e}")
+            return []
+
+    def get_group(self, group_id):
+        """グループ情報を取得"""
+        try:
+            self.cursor.execute('SELECT id, name FROM groups WHERE id = ?', (group_id,))
+            return self.cursor.fetchone()
+        except Exception as e:
+            self.logger.error(f"グループ取得中にエラーが発生: {e}")
+            return None
+
+    def get_users_by_group(self, group_id):
+        """指定されたグループのユーザーを取得"""
+        try:
+            self.cursor.execute(
+                'SELECT id, name FROM users WHERE group_id = ? ORDER BY name',
+                (group_id,)
+            )
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.logger.error(f"ユーザー取得中にエラーが発生: {e}")
+            return []
+
+    def get_all_categories_with_skills(self):
+        """全カテゴリーとスキルを取得"""
+        try:
+            # 親カテゴリーの取得
+            self.cursor.execute('''
+                SELECT id, name FROM categories 
+                WHERE is_skill = 0 
+                ORDER BY name
+            ''')
+            parent_categories = self.cursor.fetchall()
+
+            result = []
+            for parent in parent_categories:
+                # 子カテゴリー（スキル）の取得
+                self.cursor.execute('''
+                    SELECT id, name FROM categories 
+                    WHERE parent_id = ? AND is_skill = 1
+                    ORDER BY name
+                ''', (parent[0],))
+                skills = self.cursor.fetchall()
+                
+                result.append({
+                    'category': parent,
+                    'skills': skills
+                })
+            return result
+        except Exception as e:
+            self.logger.error(f"カテゴリー取得中にエラーが発生: {e}")
+            return []
+
+    def add_group(self, name):
+        """グループを追加"""
+        try:
+            self.cursor.execute(
+                'INSERT INTO groups (name, created_at, created_by) VALUES (?, ?, ?)',
+                (name, self.current_time, self.current_user)
+            )
+            self.conn.commit()
+            return self.cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"グループ追加中にエラーが発生: {e}")
+            return None
 
     def __del__(self):
         """デストラクタ：接続のクローズ"""
