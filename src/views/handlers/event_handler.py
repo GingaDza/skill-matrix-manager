@@ -6,8 +6,14 @@ from typing import Optional
 
 class SafeHandler:
     """安全なイベントハンドラーベース"""
-    def __init__(self, db, main_window, data_handler):
+    def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self._db_ref = None
+        self._main_window_ref = None
+        self._data_handler_ref = None
+        
+    def _initialize_refs(self, db, main_window, data_handler):
+        """参照の初期化"""
         self._db_ref = weakref.proxy(db)
         self._main_window_ref = weakref.proxy(main_window)
         self._data_handler_ref = weakref.proxy(data_handler)
@@ -50,7 +56,8 @@ class EventHandler(QObject, SafeHandler):
     
     def __init__(self, db, main_window, data_handler):
         QObject.__init__(self)
-        SafeHandler.__init__(self, db, main_window, data_handler)
+        SafeHandler.__init__(self)
+        self._initialize_refs(db, main_window, data_handler)
         self.logger.setLevel(logging.DEBUG)
 
     @pyqtSlot()
@@ -232,7 +239,6 @@ class EventHandler(QObject, SafeHandler):
             if not window:
                 return
                 
-            left_pane = window.left_pane
             if self.data_handler:
                 self.data_handler.refresh_user_list()
                 
