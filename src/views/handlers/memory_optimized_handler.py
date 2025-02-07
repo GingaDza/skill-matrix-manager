@@ -1,5 +1,5 @@
-from PyQt6.QtCore import QObject, QTimer
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import QObject, QTimer, Qt
+from PyQt6.QtWidgets import QWidget, QApplication
 import logging
 import psutil
 import gc
@@ -8,6 +8,7 @@ import sys
 from typing import Optional, Any, Dict, List, Set
 import weakref
 import os
+import threading
 
 class MemoryOptimizedHandler(QObject):
     """メモリ最適化ハンドラー"""
@@ -15,6 +16,10 @@ class MemoryOptimizedHandler(QObject):
     def __init__(self, db, main_window):
         super().__init__()
         self.logger = logging.getLogger(__name__)
+        
+        # メインスレッドの確認
+        if not isinstance(threading.current_thread(), threading._MainThread):
+            raise RuntimeError("MemoryOptimizedHandlerはメインスレッドで初期化する必要があります")
         
         # 弱参照の設定
         self._db = weakref.proxy(db)
@@ -26,17 +31,17 @@ class MemoryOptimizedHandler(QObject):
         
         # クリーンアップの閾値とタイミングを設定
         self._memory_threshold_mb = 100
-        self._cleanup_interval_ms = 15000  # 15秒
+        self._cleanup_interval_ms = 10000  # 10秒
         self._vms_threshold_mb = 512  # 512MB
         
         # オブジェクト追跡
-        self._tracked_objects: Set[int] = set()
+        self._tracked_objects: Dict[int, weakref.ref] = {}
+        self._qt_objects: Set[int] = set()
         self._widgets: List[weakref.ref] = []
-        self._last_unreachable = 0
         
         # ガベージコレクションの設定
         gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
-        gc.set_threshold(100, 10, 10)
+        gc.set_threshold(700, 10, 5)  # Qtオブジェクト用に調整
         
         # 初期クリーンアップ
         self._initial_cleanup()
@@ -50,15 +55,16 @@ class MemoryOptimizedHandler(QObject):
     def _initial_cleanup(self):
         """初期クリーンアップ"""
         try:
-            # 未使用モジュールの解放
+            # 不要なモジュールの解放
             for module in list(sys.modules.keys()):
                 if module not in sys.modules:
                     continue
-                if not module.startswith(('PyQt6', 'src')):
+                if not module.startswith(('PyQt6', 'src', 'logging', 'weakref')):
                     del sys.modules[module]
             
             # 完全なガベージコレクション
-            gc.collect(2)
+            for _ in range(2):  # 複数回実行して確実に
+                gc.collect()
             
             # メモリ使用量の初期値を記録
             process = psutil.Process()
@@ -69,29 +75,33 @@ class MemoryOptimizedHandler(QObject):
         except Exception as e:
             self.logger.error(f"初期クリーンアップエラー: {e}")
 
-    def _track_object(self, obj: Any):
-        """オブジェクトの追跡"""
-        if not hasattr(obj, '__dict__'):
-            return
-        
-        obj_id = id(obj)
-        if obj_id not in self._tracked_objects:
-            self._tracked_objects.add(obj_id)
-            weakref.finalize(obj, self._object_finalized, obj_id)
-
-    def _object_finalized(self, obj_id: int):
-        """オブジェクトの終了処理"""
+    def _track_qt_object(self, obj: QObject):
+        """Qtオブジェクトの追跡"""
         try:
-            self._tracked_objects.discard(obj_id)
+            obj_id = id(obj)
+            if obj_id not in self._qt_objects:
+                self._qt_objects.add(obj_id)
+                obj.destroyed.connect(lambda: self._qt_object_destroyed(obj_id))
+                
         except Exception as e:
-            self.logger.error(f"オブジェクト終了処理エラー: {e}")
+            self.logger.error(f"Qtオブジェクト追跡エラー: {e}")
+
+    def _qt_object_destroyed(self, obj_id: int):
+        """Qtオブジェクトの破棄時のコールバック"""
+        try:
+            self._qt_objects.discard(obj_id)
+        except Exception as e:
+            self.logger.error(f"Qtオブジェクト破棄エラー: {e}")
 
     def track_widget(self, widget: QWidget):
         """ウィジェットの追跡"""
         try:
+            if not widget.parent():
+                widget.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            
             widget_ref = weakref.ref(widget, self._widget_collected)
             self._widgets.append(widget_ref)
-            self._track_object(widget)
+            self._track_qt_object(widget)
             
         except Exception as e:
             self.logger.error(f"ウィジェット追跡エラー: {e}")
@@ -109,40 +119,32 @@ class MemoryOptimizedHandler(QObject):
             process = psutil.Process()
             mem = process.memory_full_info()
             
-            # メモリ使用量
-            rss_mb = mem.rss / (1024 * 1024)
-            vms_mb = mem.vms / (1024 * 1024)
-            uss_mb = mem.uss / (1024 * 1024)
-            
             self.logger.debug("=== Memory Statistics ===")
-            self.logger.debug(f"RSS: {rss_mb:.1f}MB")
-            self.logger.debug(f"VMS: {vms_mb:.1f}MB")
-            self.logger.debug(f"USS: {uss_mb:.1f}MB")
+            self.logger.debug(f"RSS: {mem.rss / (1024 * 1024):.1f}MB")
+            self.logger.debug(f"VMS: {mem.vms / (1024 * 1024):.1f}MB")
+            self.logger.debug(f"USS: {mem.uss / (1024 * 1024):.1f}MB")
             
-            # 初期値との比較
             if hasattr(self, '_initial_rss'):
                 rss_diff = (mem.rss - self._initial_rss) / (1024 * 1024)
                 vms_diff = (mem.vms - self._initial_vms) / (1024 * 1024)
                 self.logger.debug(f"RSS変化: {rss_diff:+.1f}MB")
                 self.logger.debug(f"VMS変化: {vms_diff:+.1f}MB")
             
-            # GC統計
-            self.logger.debug("=== GC Statistics ===")
-            counts = gc.get_count()
-            for gen, count in enumerate(counts):
-                threshold = gc.get_threshold()[gen]
-                self.logger.debug(f"Gen {gen}: {count}/{threshold}")
-            
-            # オブジェクト統計
-            self.logger.debug("=== Object Statistics ===")
-            self.logger.debug(f"追跡オブジェクト: {len(self._tracked_objects)}")
+            self.logger.debug("=== Qt Objects ===")
+            self.logger.debug(f"追跡中のQtオブジェクト: {len(self._qt_objects)}")
             self.logger.debug(f"生存ウィジェット: {len(self._widgets)}")
+            
+            # GC統計
+            gc_counts = gc.get_count()
+            gc_thresholds = gc.get_threshold()
+            self.logger.debug("=== GC Statistics ===")
+            for i, (count, threshold) in enumerate(zip(gc_counts, gc_thresholds)):
+                self.logger.debug(f"Generation {i}: {count}/{threshold}")
             
             # 未回収オブジェクト
             unreachable = gc.collect()
-            if unreachable != self._last_unreachable:
+            if unreachable > 0:
                 self.logger.warning(f"未回収オブジェクト: {unreachable}")
-                self._last_unreachable = unreachable
             
         except Exception as e:
             self.logger.error(f"メモリ統計ログエラー: {e}")
@@ -150,14 +152,19 @@ class MemoryOptimizedHandler(QObject):
     def _force_cleanup(self):
         """強制的なメモリクリーンアップ"""
         try:
-            # 参照カウントが0のウィジェットを解放
+            # Qtオブジェクトの解放
+            app = QApplication.instance()
+            if app:
+                app.processEvents()
+            
+            # ウィジェットの解放
             for widget_ref in self._widgets[:]:
                 widget = widget_ref()
                 if widget is None:
                     self._widgets.remove(widget_ref)
                 elif not widget.isVisible():
-                    widget.deleteLater()
-                    widget.setParent(None)
+                    if widget.parent() is None:
+                        widget.deleteLater()
                     self._widgets.remove(widget_ref)
             
             # データベース接続のリセット
@@ -165,21 +172,22 @@ class MemoryOptimizedHandler(QObject):
                 self._db.reset_connections()
             
             # 完全なガベージコレクション
+            collected = 0
             for gen in range(2, -1, -1):
-                unreachable = gc.collect(gen)
-                if unreachable:
-                    self.logger.warning(f"Gen {gen}で未回収: {unreachable}")
+                collected += gc.collect(gen)
+            
+            if collected > 0:
+                self.logger.info(f"解放されたオブジェクト: {collected}")
             
             # メモリ使用量の確認
             process = psutil.Process()
             mem = process.memory_full_info()
             
-            # 異常な増加をチェック
             if hasattr(self, '_initial_vms'):
                 vms_increase = (mem.vms - self._initial_vms) / (1024 * 1024)
                 if vms_increase > self._vms_threshold_mb:
-                    self.logger.error(
-                        f"異常なVMS増加: +{vms_increase:.1f}MB"
+                    self.logger.warning(
+                        f"高メモリ使用量: VMS +{vms_increase:.1f}MB"
                     )
             
         except Exception as e:
@@ -194,17 +202,24 @@ class MemoryOptimizedHandler(QObject):
             if self._cleanup_timer.isActive():
                 self._cleanup_timer.stop()
             
+            # Qtオブジェクトの解放
+            for obj_id in list(self._qt_objects):
+                try:
+                    obj = QObject.findChild(QObject, str(obj_id))
+                    if obj:
+                        obj.deleteLater()
+                except:
+                    pass
+            self._qt_objects.clear()
+            
             # ウィジェットの解放
             for widget_ref in self._widgets[:]:
                 widget = widget_ref()
                 if widget is not None:
                     widget.hide()
-                    widget.deleteLater()
                     widget.setParent(None)
+                    widget.deleteLater()
             self._widgets.clear()
-            
-            # 追跡オブジェクトのクリア
-            self._tracked_objects.clear()
             
             # リソースの解放
             self._db = None
@@ -216,12 +231,15 @@ class MemoryOptimizedHandler(QObject):
             self._force_cleanup()
             self._log_memory_stats()
             
-            # モジュールのクリーンアップ
+            # 不要なモジュールの解放
             for module in list(sys.modules.keys()):
                 if module not in sys.modules:
                     continue
-                if not module.startswith(('PyQt6', 'src')):
+                if not module.startswith(('PyQt6', 'src', 'logging')):
                     del sys.modules[module]
+            
+            # 最終的なガベージコレクション
+            gc.collect()
             
             self.logger.info("終了処理完了")
             
