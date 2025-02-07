@@ -5,7 +5,7 @@ from datetime import datetime
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 14:18:04"
+        self.current_time = "2025-02-07 14:20:30"
         self.db_path = "data/skill_matrix.db"
         self.init_db()
 
