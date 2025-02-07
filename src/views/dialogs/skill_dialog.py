@@ -1,154 +1,195 @@
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QTextEdit, QComboBox,
-    QPushButton, QMessageBox
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QComboBox,
+    QSpinBox,
+    QTextEdit,
+    QPushButton,
+    QMessageBox,
+    QDialogButtonBox
 )
-import logging
-from src.desktop.utils.time_utils import TimeProvider
-
-logger = logging.getLogger(__name__)
+from PyQt6.QtCore import Qt
 
 class SkillDialog(QDialog):
-    def __init__(self, category_controller, skill=None, parent=None):
+    """スキル作成・編集用ダイアログ"""
+    
+    def __init__(self, parent=None, skill_data=None, categories=None):
         """
-        スキル追加/編集ダイアログ
-        
-        Args:
-            category_controller: カテゴリーコントローラー
-            skill: 編集対象のスキル（新規作成時はNone）
-            parent: 親ウィジェット
+        Parameters:
+        -----------
+        parent : QWidget
+            親ウィジェット
+        skill_data : dict, optional
+            編集時の既存スキルデータ
+            {
+                'id': int,
+                'name': str,
+                'description': str,
+                'category_id': int,
+                'max_level': int
+            }
+        categories : list, optional
+            カテゴリーリスト
+            [{'id': int, 'name': str}, ...]
         """
         super().__init__(parent)
-        self.category_controller = category_controller
-        self.skill = skill
-        self.skill_data = None
-        self.current_time = TimeProvider.get_current_time()
-        
-        self.init_ui()
-        self.load_categories()
-        
-        if skill:
+        self.skill_data = skill_data
+        self.categories = categories or []
+        self.setup_ui()
+        if skill_data:
             self.load_skill_data()
-            
-    def init_ui(self):
-        """UIの初期化"""
-        try:
-            self.setWindowTitle("スキルの追加" if not self.skill else "スキルの編集")
-            
-            layout = QVBoxLayout(self)
-            layout.setSpacing(10)
-            
-            # カテゴリー選択
-            category_layout = QHBoxLayout()
-            category_label = QLabel("カテゴリー:")
-            self.category_combo = QComboBox()
-            category_layout.addWidget(category_label)
-            category_layout.addWidget(self.category_combo)
-            layout.addLayout(category_layout)
-            
-            # スキル名入力
-            name_layout = QHBoxLayout()
-            name_label = QLabel("スキル名:")
-            self.name_edit = QLineEdit()
-            self.name_edit.setPlaceholderText("例: Python")
-            name_layout.addWidget(name_label)
-            name_layout.addWidget(self.name_edit)
-            layout.addLayout(name_layout)
-            
-            # 説明入力
-            description_label = QLabel("説明:")
-            self.description_edit = QTextEdit()
-            self.description_edit.setPlaceholderText("スキルの説明を入力してください")
-            self.description_edit.setAcceptRichText(False)
-            layout.addWidget(description_label)
-            layout.addWidget(self.description_edit)
-            
-            # ボタン
-            button_layout = QHBoxLayout()
-            self.ok_button = QPushButton("OK")
-            self.cancel_button = QPushButton("キャンセル")
-            button_layout.addWidget(self.ok_button)
-            button_layout.addWidget(self.cancel_button)
-            layout.addLayout(button_layout)
-            
-            # シグナル/スロット接続
-            self.ok_button.clicked.connect(self.accept)
-            self.cancel_button.clicked.connect(self.reject)
-            
-            # ダイアログのサイズ設定
-            self.setMinimumWidth(400)
-            self.setMinimumHeight(300)
-            
-            logger.debug(f"{self.current_time} - SkillDialog UI initialized")
-            
-        except Exception as e:
-            logger.error(f"{self.current_time} - Failed to initialize SkillDialog UI: {str(e)}")
-            raise
-            
-    def load_categories(self):
-        """カテゴリーの読み込み"""
-        try:
-            categories = self.category_controller.get_all_categories()
-            
-            self.category_combo.clear()
-            for category in categories:
-                self.category_combo.addItem(category.name, category.id)
-                
-            logger.debug(f"{self.current_time} - Loaded {len(categories)} categories")
-            
-        except Exception as e:
-            logger.error(f"{self.current_time} - Failed to load categories: {str(e)}")
-            raise
-            
+
+    def setup_ui(self):
+        """UIコンポーネントの設定"""
+        self.setWindowTitle("スキル設定")
+        self.setModal(True)
+        self.resize(500, 400)
+
+        # メインレイアウト
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # スキル名入力
+        name_layout = QHBoxLayout()
+        name_label = QLabel("スキル名:")
+        self.name_edit = QLineEdit()
+        name_layout.addWidget(name_label)
+        name_layout.addWidget(self.name_edit)
+        layout.addLayout(name_layout)
+
+        # カテゴリー選択
+        category_layout = QHBoxLayout()
+        category_label = QLabel("カテゴリー:")
+        self.category_combo = QComboBox()
+        for category in self.categories:
+            self.category_combo.addItem(category['name'], category['id'])
+        category_layout.addWidget(category_label)
+        category_layout.addWidget(self.category_combo)
+        layout.addLayout(category_layout)
+
+        # 最大レベル設定
+        level_layout = QHBoxLayout()
+        level_label = QLabel("最大レベル:")
+        self.level_spin = QSpinBox()
+        self.level_spin.setRange(1, 10)
+        self.level_spin.setValue(5)  # デフォルト値
+        level_layout.addWidget(level_label)
+        level_layout.addWidget(self.level_spin)
+        layout.addLayout(level_layout)
+
+        # 説明入力
+        desc_label = QLabel("説明:")
+        self.desc_edit = QTextEdit()
+        self.desc_edit.setAcceptRichText(False)
+        layout.addWidget(desc_label)
+        layout.addWidget(self.desc_edit)
+
+        # レベル説明入力
+        self.level_desc_edits = []
+        self.level_desc_label = QLabel("レベル別説明:")
+        layout.addWidget(self.level_desc_label)
+        
+        self._update_level_descriptions()
+        self.level_spin.valueChanged.connect(self._update_level_descriptions)
+
+        # ボタン
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def _update_level_descriptions(self):
+        """レベル数に応じて説明入力フィールドを更新"""
+        # 既存の説明を保存
+        existing_descriptions = {}
+        for i, edit in enumerate(self.level_desc_edits):
+            if edit.text():
+                existing_descriptions[i + 1] = edit.text()
+
+        # 既存のウィジェットをクリア
+        for edit in self.level_desc_edits:
+            edit.setParent(None)
+        self.level_desc_edits.clear()
+
+        # 新しいレベル数で再作成
+        max_level = self.level_spin.value()
+        for level in range(1, max_level + 1):
+            layout = QHBoxLayout()
+            label = QLabel(f"レベル{level}:")
+            edit = QLineEdit()
+            edit.setText(existing_descriptions.get(level, ""))
+            layout.addWidget(label)
+            layout.addWidget(edit)
+            self.layout().insertLayout(self.layout().count() - 1, layout)
+            self.level_desc_edits.append(edit)
+
     def load_skill_data(self):
-        """編集時のスキルデータを読み込む"""
-        try:
-            if self.skill:
-                # カテゴリーの選択
-                index = self.category_combo.findData(self.skill.category_id)
+        """既存スキルデータの読み込み"""
+        if self.skill_data:
+            self.name_edit.setText(self.skill_data.get('name', ''))
+            self.desc_edit.setPlainText(self.skill_data.get('description', ''))
+            
+            # カテゴリーの設定
+            category_id = self.skill_data.get('category_id')
+            if category_id is not None:
+                index = self.category_combo.findData(category_id)
                 if index >= 0:
                     self.category_combo.setCurrentIndex(index)
-                    
-                # スキル名と説明を設定
-                self.name_edit.setText(self.skill.name)
-                self.description_edit.setText(self.skill.description or "")
-                
-            logger.debug(f"{self.current_time} - Loaded skill data for editing")
             
-        except Exception as e:
-            logger.error(f"{self.current_time} - Failed to load skill data: {str(e)}")
-            raise
+            # 最大レベルの設定
+            max_level = self.skill_data.get('max_level', 5)
+            self.level_spin.setValue(max_level)
             
+            # レベル別説明の設定
+            level_descriptions = self.skill_data.get('level_descriptions', {})
+            for level, desc in level_descriptions.items():
+                if 0 <= level - 1 < len(self.level_desc_edits):
+                    self.level_desc_edits[level - 1].setText(desc)
+
+    def get_skill_data(self):
+        """
+        Returns:
+        --------
+        dict
+            入力されたスキルデータ
+        """
+        level_descriptions = {}
+        for i, edit in enumerate(self.level_desc_edits):
+            if edit.text():
+                level_descriptions[i + 1] = edit.text()
+
+        return {
+            'id': self.skill_data.get('id') if self.skill_data else None,
+            'name': self.name_edit.text().strip(),
+            'description': self.desc_edit.toPlainText().strip(),
+            'category_id': self.category_combo.currentData(),
+            'max_level': self.level_spin.value(),
+            'level_descriptions': level_descriptions
+        }
+
     def accept(self):
-        """OKボタンが押された時の処理"""
-        try:
-            category_id = self.category_combo.currentData()
-            name = self.name_edit.text().strip()
-            description = self.description_edit.toPlainText().strip()
-            
-            # 入力値の検証
-            if not category_id:
-                QMessageBox.warning(self, "警告", "カテゴリーを選択してください。")
-                return
-                
-            if not name:
-                QMessageBox.warning(self, "警告", "スキル名を入力してください。")
-                return
-                
-            # スキルデータの設定
-            self.skill_data = {
-                'category_id': category_id,
-                'name': name,
-                'description': description if description else None
-            }
-            
-            logger.debug(f"{self.current_time} - Skill data accepted: {name}")
-            super().accept()
-            
-        except Exception as e:
-            logger.error(f"{self.current_time} - Failed to process skill data: {str(e)}")
-            QMessageBox.critical(self, "エラー", "データの処理に失敗しました。")
-            
-    def get_skill_data(self) -> dict:
-        """入力されたスキルデータを取得"""
-        return self.skill_data
+        """OKボタン押下時の処理"""
+        name = self.name_edit.text().strip()
+        if not name:
+            QMessageBox.warning(
+                self,
+                "入力エラー",
+                "スキル名を入力してください。"
+            )
+            return
+        
+        if self.category_combo.count() == 0:
+            QMessageBox.warning(
+                self,
+                "エラー",
+                "カテゴリーが設定されていません。"
+            )
+            return
+
+        super().accept()
