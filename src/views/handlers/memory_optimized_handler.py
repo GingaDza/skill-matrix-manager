@@ -1,3 +1,4 @@
+from src.utils.memory_monitor import MemoryMonitor
 from PyQt6.QtWidgets import QMessageBox, QListWidgetItem
 from PyQt6.QtCore import (
     QObject, Qt, QTimer, QThread, QMetaObject,
