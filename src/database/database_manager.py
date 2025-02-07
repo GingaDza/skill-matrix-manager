@@ -6,8 +6,12 @@ import os
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-07 20:48:30"
+        self.current_time = "2025-02-07 20:49:54"
         self.db_path = "database/skill_matrix.db"
+        
+        # データベースファイルが存在する場合は削除
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
         
         # データベースディレクトリの作成
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
@@ -43,7 +47,7 @@ class DatabaseManager:
                         group_id INTEGER,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL,
-                        deleted_at TEXT,
+                        deleted_at TEXT DEFAULT NULL,
                         FOREIGN KEY (group_id) REFERENCES groups (id) 
                             ON DELETE SET NULL
                     )
