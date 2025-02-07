@@ -3,166 +3,149 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QPushButton,
-    QLabel,
-    QMessageBox
+    QListWidget,
+    QLabel
 )
-from PyQt6.QtCore import Qt
-from ...components.lists.group_list_widget import GroupListWidget
-from ...components.lists.category_tree_widget import CategoryTreeWidget
-from ...dialogs.group_dialog import GroupDialog
-from ...dialogs.category_dialog import CategoryDialog
-from ...dialogs.skill_dialog import SkillDialog
+from ....database.database_manager import DatabaseManager
 
 class InitialSettingsTab(QWidget):
-    """システム初期設定タブ"""
-
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.db = parent.db if parent else None
+        self.db = DatabaseManager()
         self.setup_ui()
-        self.load_data()
 
     def setup_ui(self):
-        """UIコンポーネントの設定"""
-        layout = QHBoxLayout()
-        self.setLayout(layout)
+        layout = QHBoxLayout(self)
 
-        # 左側：グループ管理
-        group_container = QWidget()
-        group_layout = QVBoxLayout()
-        group_container.setLayout(group_layout)
-
-        group_header = QHBoxLayout()
-        group_label = QLabel("グループ管理")
-        add_group_btn = QPushButton("追加")
-        add_group_btn.clicked.connect(self.add_group)
-        group_header.addWidget(group_label)
-        group_header.addWidget(add_group_btn)
-        group_header.addStretch()
-
-        self.group_list = GroupListWidget(self)
-        self.group_list.group_selected.connect(self.on_group_selected)
-
-        group_layout.addLayout(group_header)
+        # グループリスト（左）
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.addWidget(QLabel("グループリスト"))
+        
+        self.group_list = QListWidget()
+        self.group_list.itemSelectionChanged.connect(self.on_group_selected)
         group_layout.addWidget(self.group_list)
 
-        # 右側：カテゴリー管理
-        category_container = QWidget()
-        category_layout = QVBoxLayout()
-        category_container.setLayout(category_layout)
+        # グループ操作ボタン
+        group_button_layout = QVBoxLayout()
+        self.add_group_btn = QPushButton("追加")
+        self.edit_group_btn = QPushButton("編集")
+        self.delete_group_btn = QPushButton("削除")
+        
+        group_button_layout.addWidget(self.add_group_btn)
+        group_button_layout.addWidget(self.edit_group_btn)
+        group_button_layout.addWidget(self.delete_group_btn)
+        group_layout.addLayout(group_button_layout)
 
-        category_header = QHBoxLayout()
-        category_label = QLabel("カテゴリー管理")
-        add_category_btn = QPushButton("追加")
-        add_category_btn.clicked.connect(self.add_category)
-        category_header.addWidget(category_label)
-        category_header.addWidget(add_category_btn)
-        category_header.addStretch()
+        layout.addWidget(group_widget)
 
-        self.category_tree = CategoryTreeWidget(self)
-        self.category_tree.category_selected.connect(self.on_category_selected)
+        # カテゴリーリスト（中央）
+        category_widget = QWidget()
+        category_layout = QVBoxLayout(category_widget)
+        category_layout.addWidget(QLabel("親カテゴリーリスト"))
+        
+        self.category_list = QListWidget()
+        self.category_list.itemSelectionChanged.connect(self.on_category_selected)
+        category_layout.addWidget(self.category_list)
 
-        category_layout.addLayout(category_header)
-        category_layout.addWidget(self.category_tree)
+        # カテゴリー操作ボタン
+        category_button_layout = QVBoxLayout()
+        self.add_category_btn = QPushButton("追加")
+        self.edit_category_btn = QPushButton("編集")
+        self.delete_category_btn = QPushButton("削除")
+        
+        category_button_layout.addWidget(self.add_category_btn)
+        category_button_layout.addWidget(self.edit_category_btn)
+        category_button_layout.addWidget(self.delete_category_btn)
+        category_layout.addLayout(category_button_layout)
 
-        # レイアウトの追加
-        layout.addWidget(group_container)
-        layout.addWidget(category_container)
+        layout.addWidget(category_widget)
 
-    def load_data(self):
-        """データの読み込み"""
-        self.group_list.load_groups()
-        self.category_tree.load_categories()
+        # スキルリスト（右）
+        skill_widget = QWidget()
+        skill_layout = QVBoxLayout(skill_widget)
+        skill_layout.addWidget(QLabel("子カテゴリーリスト"))
+        
+        self.skill_list = QListWidget()
+        self.skill_list.itemSelectionChanged.connect(self.on_skill_selected)
+        skill_layout.addWidget(self.skill_list)
 
-    def add_group(self):
-        """グループの追加"""
-        dialog = GroupDialog(self)
-        if dialog.exec():
-            group_data = dialog.get_group_data()
-            success = self.db.add_group(
-                group_data['name'],
-                group_data['description']
-            )
-            if success:
-                self.group_list.refresh()
-            else:
-                QMessageBox.warning(
-                    self,
-                    "エラー",
-                    "グループの追加に失敗しました。"
-                )
+        # スキル操作ボタン
+        skill_button_layout = QVBoxLayout()
+        self.add_skill_btn = QPushButton("追加")
+        self.edit_skill_btn = QPushButton("編集")
+        self.delete_skill_btn = QPushButton("削除")
+        
+        skill_button_layout.addWidget(self.add_skill_btn)
+        skill_button_layout.addWidget(self.edit_skill_btn)
+        skill_button_layout.addWidget(self.delete_skill_btn)
+        skill_layout.addLayout(skill_button_layout)
 
-    def add_category(self):
-        """カテゴリーの追加"""
-        dialog = CategoryDialog(self)
-        if dialog.exec():
-            category_data = dialog.get_category_data()
-            success = self.db.add_category(
-                category_data['name'],
-                category_data['description'],
-                category_data['parent_id']
-            )
-            if success:
-                self.category_tree.refresh()
-            else:
-                QMessageBox.warning(
-                    self,
-                    "エラー",
-                    "カテゴリーの追加に失敗しました。"
-                )
+        layout.addWidget(skill_widget)
 
-    def on_group_selected(self, group_id):
+        # 新規タブ追加ボタン
+        tab_button_layout = QVBoxLayout()
+        self.add_tab_btn = QPushButton("新規タブ追加")
+        self.add_tab_btn.clicked.connect(self.on_add_tab)
+        tab_button_layout.addWidget(self.add_tab_btn)
+        layout.addLayout(tab_button_layout)
+
+        self.load_initial_data()
+
+    def load_initial_data(self):
+        """初期データのロード"""
+        # グループリストの更新
+        groups = self.db.get_all_groups()
+        self.group_list.clear()
+        for group in groups:
+            self.group_list.addItem(group[1])  # group[1] は name
+
+    def on_group_selected(self):
         """グループ選択時の処理"""
-        group = self.db.get_group(group_id)
-        if group:
-            dialog = GroupDialog(self, group_data={
-                'id': group[0],
-                'name': group[1],
-                'description': group[2]
-            })
-            if dialog.exec():
-                data = dialog.get_group_data()
-                success = self.db.update_group(
-                    data['id'],
-                    data['name'],
-                    data['description']
-                )
-                if success:
-                    self.group_list.refresh()
-                else:
-                    QMessageBox.warning(
-                        self,
-                        "エラー",
-                        "グループの更新に失敗しました。"
-                    )
+        selected_items = self.group_list.selectedItems()
+        if selected_items:
+            group_name = selected_items[0].text()
+            # グループIDの取得
+            groups = self.db.get_all_groups()
+            group_id = next((g[0] for g in groups if g[1] == group_name), None)
+            if group_id:
+                group = self.db.get_group(group_id)
+                if group:
+                    # カテゴリーリストの更新
+                    self.update_category_list(group_id)
 
-    def on_category_selected(self, category_id):
-        """カテゴリー選択時の処理"""
-        category = self.db.get_category(category_id)
-        if category:
-            dialog = CategoryDialog(
-                self,
-                category_data={
-                    'id': category[0],
-                    'name': category[1],
-                    'description': category[2],
-                    'parent_id': category[3]
-                },
-                categories=self.db.get_all_categories()
-            )
-            if dialog.exec():
-                data = dialog.get_category_data()
-                success = self.db.update_category(
-                    data['id'],
-                    data['name'],
-                    data['description'],
-                    data['parent_id']
-                )
-                if success:
-                    self.category_tree.refresh()
-                else:
-                    QMessageBox.warning(
-                        self,
-                        "エラー",
-                        "カテゴリーの更新に失敗しました。"
-                    )
+    def on_category_selected(self):
+        """親カテゴリー選択時の処理"""
+        selected_items = self.category_list.selectedItems()
+        if selected_items:
+            category_name = selected_items[0].text()
+            # スキルリストの更新
+            self.update_skill_list(category_name)
+
+    def on_skill_selected(self):
+        """スキル選択時の処理"""
+        pass  # 必要に応じて実装
+
+    def on_add_tab(self):
+        """新規タブ追加ボタンのクリックハンドラ"""
+        selected_items = self.category_list.selectedItems()
+        if selected_items:
+            category_name = selected_items[0].text()
+            if self.parent() and hasattr(self.parent(), 'add_category_tab'):
+                self.parent().add_category_tab(category_name)
+
+    def update_category_list(self, group_id):
+        """カテゴリーリストの更新"""
+        self.category_list.clear()
+        categories = self.db.get_all_categories_with_skills()
+        for category in categories:
+            self.category_list.addItem(category['category'][1])
+
+    def update_skill_list(self, category_name):
+        """スキルリストの更新"""
+        self.skill_list.clear()
+        categories = self.db.get_all_categories_with_skills()
+        for category in categories:
+            if category['category'][1] == category_name:
+                for skill in category['skills']:
+                    self.skill_list.addItem(skill[1])
