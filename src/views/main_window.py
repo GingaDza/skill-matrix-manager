@@ -16,8 +16,7 @@ from .tabs.system_management.data_io_tab import DataIOTab
 from .tabs.system_management.system_info_tab import SystemInfoTab
 from .tabs.category.category_tab import CategoryTab
 from .tabs.evaluation.total_evaluation_tab import TotalEvaluationTab
-from ..database.database_manager import DatabaseManager  # DatabaseManagerのインポートを追加
-from ..utils.time_utils import TimeProvider
+from ..database.database_manager import DatabaseManager
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -33,16 +32,6 @@ class MainWindow(QMainWindow):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QVBoxLayout(main_widget)
-
-        # ヘッダー（シンプルなテキスト表示のみ）
-        header_layout = QHBoxLayout()
-        time_label = QLabel(f"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {TimeProvider.get_formatted_time()}")
-        user_label = QLabel(f"Current User's Login: {TimeProvider.get_current_user()}")
-        
-        header_layout.addWidget(time_label)
-        header_layout.addStretch()
-        header_layout.addWidget(user_label)
-        main_layout.addLayout(header_layout)
 
         # スプリッター（3:7の分割）
         splitter = QSplitter(Qt.Orientation.Horizontal)
