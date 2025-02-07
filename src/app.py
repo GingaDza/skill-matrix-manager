@@ -2,7 +2,8 @@
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt, QtMsgType
 from .utils.memory_profiler import MemoryProfiler
-from .utils.log_config import memory_loggerfrom .utils.type_manager import TypeManager
+from .utils.type_manager import TypeManager
+from .utils.log_config import memory_logger
 import logging
 import sys
 import psutil
@@ -15,12 +16,14 @@ class SkillMatrixApp(QApplication):
     """スキルマトリックスアプリケーション"""
     
     def __init__(self, argv):
-        # デバッグモードの設定
-        memory_logger.set_debug_mode(False)  # 通常モードではFalse        super().__init__(argv)
+        super().__init__(argv)
         
         # ロガーの設定
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Starting App initialization")
+        
+        # デバッグモードの設定
+        memory_logger.set_debug_mode(False)  # 通常モードではFalse
         
         # メモリプロファイラーの初期化
         self._profiler = MemoryProfiler()
@@ -96,13 +99,8 @@ class SkillMatrixApp(QApplication):
         try:
             # メモリ使用量の監視
             if event.type() == Qt.ApplicationAttribute.AA_EnableHighDpiScaling:
-                process = psutil.Process()
-                mem = process.memory_full_info()
-                rss_mb = mem.rss / (1024 * 1024)
-                vms_mb = mem.vms / (1024 * 1024)
-                
-                if vms_mb > 512:  # 512MB以上
-                    self.logger.warning(f"高メモリ使用量: VMS {vms_mb:.1f}MB")
+                stats = self._profiler.analyze_memory_usage()
+                if stats.get('warning') or stats.get('error'):
                     gc.collect()
             
             return super().event(event)
