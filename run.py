@@ -20,7 +20,7 @@ def main():
         
         # 現在のユーザー情報をログ出力
         logger.info("現在のユーザー: GingaDza")
-        logger.info("現在の時刻: 2025-02-07 12:48:10")  # 時刻を更新
+        logger.info("現在の時刻: 2025-02-07 13:34:50")  # 時刻を更新
         
         sys.exit(app.exec())
     except Exception as e:
