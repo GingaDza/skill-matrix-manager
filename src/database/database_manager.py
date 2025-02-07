@@ -3,23 +3,20 @@ import logging
 from pathlib import Path
 
 class DatabaseManager:
-    """データベース管理クラス"""
-
     def __init__(self):
-        """初期化"""
         self.logger = logging.getLogger(__name__)
         self.db_path = Path('data/skill_matrix.db')
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = None
-        self.cursor = None
+        self.conn = sqlite3.connect(self.db_path)
+        self.cursor = self.conn.cursor()
+        self.initialize_database()
 
     def initialize_database(self):
         """データベースの初期化"""
         self.logger.info("データベースの初期化を開始")
         try:
-            self.conn = sqlite3.connect(self.db_path)
-            self.cursor = self.conn.cursor()
             self._create_tables()
+            self._insert_initial_data()
             self.conn.commit()
             self.logger.info("データベースの初期化が完了しました")
         except Exception as e:
@@ -72,6 +69,14 @@ class DatabaseManager:
         )
         ''')
 
+    def _insert_initial_data(self):
+        """初期データの挿入"""
+        # 初期グループの作成
+        try:
+            self.cursor.execute('INSERT OR IGNORE INTO groups (name) VALUES (?)', ('デフォルトグループ',))
+        except sqlite3.IntegrityError:
+            pass
+
     def get_all_groups(self):
         """全グループを取得"""
         try:
@@ -91,6 +96,36 @@ class DatabaseManager:
             return self.cursor.fetchall()
         except Exception as e:
             self.logger.error(f"ユーザー取得中にエラーが発生: {e}")
+            return []
+
+    def get_all_categories_with_skills(self):
+        """全カテゴリーとスキルを取得"""
+        try:
+            # 親カテゴリーの取得
+            self.cursor.execute('''
+                SELECT id, name FROM categories 
+                WHERE parent_id IS NULL 
+                ORDER BY name
+            ''')
+            parent_categories = self.cursor.fetchall()
+
+            result = []
+            for parent in parent_categories:
+                # 子カテゴリー（スキル）の取得
+                self.cursor.execute('''
+                    SELECT id, name FROM categories 
+                    WHERE parent_id = ? 
+                    ORDER BY name
+                ''', (parent[0],))
+                skills = self.cursor.fetchall()
+                
+                result.append({
+                    'category': parent,
+                    'skills': skills
+                })
+            return result
+        except Exception as e:
+            self.logger.error(f"カテゴリー取得中にエラーが発生: {e}")
             return []
 
     def add_group(self, name):
@@ -139,7 +174,20 @@ class DatabaseManager:
             self.logger.error(f"ユーザー削除中にエラーが発生: {e}")
             return False
 
+    def add_category(self, name, parent_id=None):
+        """カテゴリーを追加"""
+        try:
+            self.cursor.execute(
+                'INSERT INTO categories (name, parent_id) VALUES (?, ?)',
+                (name, parent_id)
+            )
+            self.conn.commit()
+            return self.cursor.lastrowid
+        except Exception as e:
+            self.logger.error(f"カテゴリー追加中にエラーが発生: {e}")
+            return None
+
     def __del__(self):
         """デストラクタ：接続のクローズ"""
-        if self.conn:
+        if hasattr(self, 'conn') and self.conn:
             self.conn.close()
