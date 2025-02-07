@@ -1,111 +1,82 @@
-# src/views/tabs/system_management/group_manager.py
-
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QLabel, QListWidget, QMessageBox
+    QWidget, QVBoxLayout, QPushButton,
+    QListWidget, QListWidgetItem, QLabel,
+    QMessageBox
 )
-from .base_classes import ListItemWithId, AddEditDialog
+from PyQt6.QtCore import Qt
+from ....database.database_manager import DatabaseManager
 import logging
-
-logger = logging.getLogger(__name__)
 
 class GroupManager(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.parent = parent
+        self.logger = logging.getLogger(__name__)
+        self.db = DatabaseManager()
         self.setup_ui()
-        logger.debug("GroupManager initialized")
 
     def setup_ui(self):
+        """UIの初期設定"""
         layout = QVBoxLayout(self)
         
-        # タイトル
-        layout.addWidget(QLabel("グループ管理"))
+        # グループリストのラベル
+        layout.addWidget(QLabel("グループリスト"))
         
         # グループリスト
         self.group_list = QListWidget()
+        self.group_list.itemSelectionChanged.connect(self.on_group_selected)
         layout.addWidget(self.group_list)
         
-        # ボタンレイアウト
-        btn_layout = QHBoxLayout()
-        add_btn = QPushButton("追加")
-        edit_btn = QPushButton("編集")
-        delete_btn = QPushButton("削除")
+        # ボタン
+        button_layout = QVBoxLayout()
         
-        add_btn.clicked.connect(self.add_group)
-        edit_btn.clicked.connect(self.edit_group)
-        delete_btn.clicked.connect(self.delete_group)
+        self.add_btn = QPushButton("追加")
+        self.edit_btn = QPushButton("編集")
+        self.delete_btn = QPushButton("削除")
         
-        btn_layout.addWidget(add_btn)
-        btn_layout.addWidget(edit_btn)
-        btn_layout.addWidget(delete_btn)
-        layout.addLayout(btn_layout)
+        self.add_btn.clicked.connect(self.add_group)
+        self.edit_btn.clicked.connect(self.edit_group)
+        self.delete_btn.clicked.connect(self.delete_group)
         
-        logger.debug("GroupManager UI setup completed")
+        button_layout.addWidget(self.add_btn)
+        button_layout.addWidget(self.edit_btn)
+        button_layout.addWidget(self.delete_btn)
+        
+        layout.addLayout(button_layout)
 
     def load_groups(self):
+        """グループリストの読み込み"""
         try:
-            groups = self.parent.db.get_all_groups()
             self.group_list.clear()
-            for group_id, name, _ in groups:
-                self.group_list.addItem(ListItemWithId(name, group_id))
-            logger.debug(f"Loaded {len(groups)} groups")
+            groups = self.db.get_all_groups()
+            
+            for group in groups:
+                group_id, name = group  # groupは(id, name)のタプル
+                item = QListWidgetItem(name)
+                item.setData(Qt.ItemDataRole.UserRole, group_id)
+                self.group_list.addItem(item)
+                
         except Exception as e:
-            logger.error(f"Error loading groups: {str(e)}")
+            self.logger.error(f"Error loading groups: {str(e)}")
             raise
 
+    def on_group_selected(self):
+        """グループ選択時の処理"""
+        selected_items = self.group_list.selectedItems()
+        if selected_items:
+            group_id = selected_items[0].data(Qt.ItemDataRole.UserRole)
+            # グループ選択時の処理を実装
+
     def add_group(self):
-        try:
-            dialog = AddEditDialog(self, "グループ追加")
-            if dialog.exec():
-                name = dialog.get_name()
-                if name:
-                    group_id = self.parent.db.add_group(name)
-                    self.group_list.addItem(ListItemWithId(name, group_id))
-                    self.parent.emit_group_update()
-                    logger.debug(f"Added group: {name} (ID: {group_id})")
-        except Exception as e:
-            logger.error(f"Error adding group: {str(e)}")
-            QMessageBox.critical(self, "エラー", str(e))
+        """グループの追加"""
+        # グループ追加の処理を実装
+        pass
 
     def edit_group(self):
-        try:
-            current_item = self.group_list.currentItem()
-            if not current_item:
-                QMessageBox.warning(self, "警告", "編集するグループを選択してください。")
-                return
-
-            dialog = AddEditDialog(self, "グループ編集", current_item.text())
-            if dialog.exec():
-                new_name = dialog.get_name()
-                if new_name:
-                    self.parent.db.update_group(current_item.item_id, new_name)
-                    current_item.setText(new_name)
-                    self.parent.emit_group_update()
-                    logger.debug(f"Edited group to: {new_name}")
-        except Exception as e:
-            logger.error(f"Error editing group: {str(e)}")
-            QMessageBox.critical(self, "エラー", str(e))
+        """グループの編集"""
+        # グループ編集の処理を実装
+        pass
 
     def delete_group(self):
-        try:
-            current_item = self.group_list.currentItem()
-            if not current_item:
-                QMessageBox.warning(self, "警告", "削除するグループを選択してください。")
-                return
-
-            reply = QMessageBox.question(
-                self, '確認', 
-                f'グループ "{current_item.text()}" を削除してもよろしいですか？\n'
-                f'※所属するユーザーも削除されます',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                self.parent.db.delete_group(current_item.item_id)
-                self.group_list.takeItem(self.group_list.row(current_item))
-                self.parent.emit_group_update()
-                logger.debug(f"Deleted group: {current_item.text()}")
-        except Exception as e:
-            logger.error(f"Error deleting group: {str(e)}")
-            QMessageBox.critical(self, "エラー", str(e))
+        """グループの削除"""
+        # グループ削除の処理を実装
+        pass
