@@ -267,7 +267,7 @@ class MainWindow(QMainWindow):
             if not selected_items:
                 QMessageBox.warning(self, "警告", "ユーザーを選択してください")
                 return
-                
+            
             reply = QMessageBox.question(
                 self, "確認", 
                 "選択したユーザーを削除しますか？",
@@ -293,9 +293,6 @@ class MainWindow(QMainWindow):
                         QMessageBox.warning(self, "警告", "ユーザーの削除に失敗しました")
                 except Exception as e:
                     self.logger.error(f"Database error while deleting user: {e}")
-                    QMessageBox.critical(self, "エラー", "ユーザーの削除に失敗しました")
-        except Exception as e:
-            self.logger.error(f"Error in delete_user: {e}", exc_info=True)
                     QMessageBox.critical(self, "エラー", "ユーザーの削除に失敗しました")
         except Exception as e:
             self.logger.error(f"Error in delete_user: {e}", exc_info=True)
