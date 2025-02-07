@@ -29,7 +29,7 @@ class CategoryTreeWidget(QTreeWidget):
         
         for category in categories:
             item = QTreeWidgetItem([
-                category[1],  # name
+                str(category[1]),  # name
                 str(category[6] or 0)  # skill_count
             ])
             item.setData(0, Qt.ItemDataRole.UserRole, category[0])  # id

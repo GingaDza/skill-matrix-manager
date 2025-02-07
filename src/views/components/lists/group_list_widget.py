@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt
 
 class GroupListWidget(QListWidget):
     """グループ一覧を表示するウィジェット"""
@@ -22,7 +22,7 @@ class GroupListWidget(QListWidget):
         self.clear()
         groups = self.db.get_all_groups()
         for group in groups:
-            item = QListWidgetItem(group[1])  # group[1] は name
+            item = QListWidgetItem(str(group[1]))  # group[1] は name
             item.setData(Qt.ItemDataRole.UserRole, group[0])  # group[0] は id
             self.addItem(item)
 
