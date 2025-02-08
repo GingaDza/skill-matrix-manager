@@ -1,31 +1,30 @@
 """システム管理ウィジェット"""
-from typing import Optional
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
-from .settings import SettingsWidget
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from .group_manager import GroupManager
+from .category_manager import CategoryManager
 
 class SystemManagementWidget(QWidget):
-    """システム管理ウィジェット"""
+    """システム管理ウィジェットクラス"""
     
-    def __init__(self, db_manager, parent: Optional[QWidget] = None):
-        """
-        初期化
-        
-        Args:
-            db_manager: データベースマネージャー
-            parent: 親ウィジェット
-        """
+    def __init__(self, parent=None):
+        """初期化"""
         super().__init__(parent)
-        self._db_manager = db_manager
-        self.tab_widget = QTabWidget()
-        self.init_ui()
-
-    def init_ui(self):
-        """UIを初期化する"""
+        self._init_ui()
+    
+    def _init_ui(self):
+        """UIの初期化"""
         layout = QVBoxLayout()
+        
+        # タブウィジェットの作成
+        tab_widget = QTabWidget()
+        
+        # グループ管理タブ
+        group_manager = GroupManager()
+        tab_widget.addTab(group_manager, "グループ管理")
+        
+        # カテゴリー管理タブ
+        category_manager = CategoryManager()
+        tab_widget.addTab(category_manager, "カテゴリー管理")
+        
+        layout.addWidget(tab_widget)
         self.setLayout(layout)
-        
-        # 設定タブを作成
-        settings = SettingsWidget(self._db_manager, self.tab_widget)
-        self.tab_widget.addTab(settings, "設定")
-        
-        layout.addWidget(self.tab_widget)

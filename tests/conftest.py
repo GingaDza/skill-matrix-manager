@@ -1,11 +1,10 @@
+"""テスト用の共通フィクスチャ"""
 import pytest
-from PyQt6.QtWidgets import QApplication
-import sys
+from PyQt5.QtWidgets import QApplication
 
 @pytest.fixture(scope="session")
 def qapp():
-    """グローバルなQApplicationインスタンス"""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
+    """PyQtアプリケーションのフィクスチャ"""
+    app = QApplication([])
     yield app
+    app.quit()

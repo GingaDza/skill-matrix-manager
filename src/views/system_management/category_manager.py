@@ -1,45 +1,111 @@
-            items = self.group_list.findItems(group_name, Qt.MatchFlag.MatchExactly)
-            if items:
-                self.group_list.setCurrentItem(items[0])
-            
-            # グループコンボボックスの選択を同期
-            index = self.category_group_combo.findText(group_name)
-            if index >= 0:
-                self.category_group_combo.setCurrentIndex(index)
-            
-            # メインウィンドウのグループ選択も同期
-            parent = self.parentWidget()
-            while parent:
-                if isinstance(parent, QMainWindow):
-                    if hasattr(parent, 'group_combo'):
-                        index = parent.group_combo.findText(group_name)
-                        if index >= 0:
-                            parent.group_combo.setCurrentIndex(index)
-                    break
-                parent = parent.parentWidget()
-            
-            self.logger.info(f"グループ選択を同期: {group_name}")
-            
-        except Exception as e:
-            self.logger.exception("グループ選択同期エラー")
+"""カテゴリー管理ウィジェット"""
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLineEdit, QLabel,
+    QListWidget, QMessageBox
+)
+from PyQt5.QtCore import Qt
+from ...database.database_manager import DatabaseManager
 
-    def _on_category_group_changed(self, group_name: str):
-        """カテゴリー用グループ選択時のイベント"""
-        try:
-            self.logger.info(f"選択されたグループ: {group_name}")
-            
-            # グループ選択の同期
-            self._sync_group_selections(group_name)
-            
-            # 選択されたグループの親カテゴリーを読み込み
-            group_id = self._db_manager.get_group_id_by_name(group_name)
-            if group_id is not None:
-                categories = self._db_manager.get_parent_categories_by_group(group_id)
-                self.logger.info(f"グループのカテゴリー: {categories}")
-                
-                self.parent_list.clear()
-                self.parent_list.addItems(categories)
-                self.child_list.clear()
-            
-        except Exception as e:
-            self.logger.exception("カテゴリー読み込みエラー")
+class CategoryManager(QWidget):
+    """カテゴリー管理クラス"""
+    
+    def __init__(self, db_manager: DatabaseManager = None):
+        """
+        初期化
+        
+        Args:
+            db_manager: データベースマネージャーのインスタンス
+        """
+        super().__init__()
+        self._db = db_manager
+        self._init_ui()
+    
+    def _init_ui(self):
+        """UIの初期化"""
+        layout = QVBoxLayout()
+        
+        # カテゴリー追加部分
+        add_layout = QHBoxLayout()
+        
+        self.category_input = QLineEdit()
+        self.category_input.setPlaceholderText("新しいカテゴリー名")
+        add_layout.addWidget(self.category_input)
+        
+        add_button = QPushButton("追加")
+        add_button.clicked.connect(self._add_category)
+        add_layout.addWidget(add_button)
+        
+        layout.addLayout(add_layout)
+        
+        # カテゴリーリスト
+        self.category_list = QListWidget()
+        layout.addWidget(self.category_list)
+        
+        # 削除ボタン
+        delete_button = QPushButton("削除")
+        delete_button.clicked.connect(self._delete_category)
+        layout.addWidget(delete_button)
+        
+        self.setLayout(layout)
+        self._load_categories()
+    
+    def _load_categories(self):
+        """カテゴリー一覧を読み込む"""
+        self.category_list.clear()
+        if self._db:
+            try:
+                categories = self._db.get_categories()
+                for category in categories:
+                    self.category_list.addItem(category)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "エラー",
+                    f"カテゴリーの読み込みに失敗しました: {str(e)}"
+                )
+    
+    def _add_category(self):
+        """カテゴリーを追加する"""
+        name = self.category_input.text().strip()
+        if not name:
+            QMessageBox.warning(
+                self,
+                "警告",
+                "カテゴリー名を入力してください"
+            )
+            return
+        
+        if self._db:
+            try:
+                self._db.add_category(name)
+                self.category_input.clear()
+                self._load_categories()
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "エラー",
+                    f"カテゴリーの追加に失敗しました: {str(e)}"
+                )
+    
+    def _delete_category(self):
+        """選択されたカテゴリーを削除する"""
+        current = self.category_list.currentItem()
+        if not current:
+            QMessageBox.warning(
+                self,
+                "警告",
+                "削除するカテゴリーを選択してください"
+            )
+            return
+        
+        if self._db:
+            try:
+                self._db.delete_category(current.text())
+                self._load_categories()
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "エラー",
+                    f"カテゴリーの削除に失敗しました: {str(e)}"
+                )
