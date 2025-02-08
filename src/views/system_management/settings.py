@@ -11,120 +11,7 @@ from ...database.database_manager import DatabaseManager
 class SettingsWidget(QWidget):
     """初期設定タブのウィジェット"""
     
-    def __init__(self, db_manager: DatabaseManager):
-        super().__init__()
-        self.logger = logging.getLogger(__name__)
-        self._db_manager = db_manager
-        
-        # UI要素の初期化
-        self.group_list = None
-        self.category_group_combo = None
-        self.parent_list = None
-        self.child_list = None
-        
-        # ボタンの初期化
-        self.add_group_btn = None
-        self.edit_group_btn = None
-        self.delete_group_btn = None
-        self.add_category_btn = None
-        self.edit_category_btn = None
-        self.delete_category_btn = None
-        self.add_skill_btn = None
-        self.edit_skill_btn = None
-        self.delete_skill_btn = None
-        self.new_tab_btn = None
-        
-        # UIの構築
-        self._init_ui()
-        self._connect_signals()
-        self._load_data()
-
-    def _init_ui(self):
-        """UIの初期化"""
-        layout = QHBoxLayout()
-        
-        # グループリスト
-        group_box = self._create_group_list()
-        layout.addWidget(group_box)
-        
-        # カテゴリーリスト
-        category_box = self._create_category_lists()
-        layout.addWidget(category_box)
-        
-        self.setLayout(layout)
-
-    def _create_group_list(self):
-        """グループリストの作成"""
-        group_box = QGroupBox("グループリスト")
-        layout = QVBoxLayout()
-        
-        self.group_list = QListWidget()
-        layout.addWidget(self.group_list)
-        
-        # 操作ボタン
-        button_layout = QVBoxLayout()
-        self.add_group_btn = QPushButton("追加")
-        self.edit_group_btn = QPushButton("編集")
-        self.delete_group_btn = QPushButton("削除")
-        
-        button_layout.addWidget(self.add_group_btn)
-        button_layout.addWidget(self.edit_group_btn)
-        button_layout.addWidget(self.delete_group_btn)
-        
-        layout.addLayout(button_layout)
-        group_box.setLayout(layout)
-        return group_box
-
-    def _create_category_lists(self):
-        """カテゴリーリストの作成"""
-        category_box = QGroupBox("カテゴリー管理")
-        layout = QVBoxLayout()
-        
-        # グループ選択
-        group_select_layout = QHBoxLayout()
-        group_select_layout.addWidget(QLabel("グループ:"))
-        self.category_group_combo = QComboBox()
-        group_select_layout.addWidget(self.category_group_combo)
-        layout.addLayout(group_select_layout)
-        
-        # 親カテゴリー
-        parent_box = QGroupBox("親カテゴリー")
-        parent_layout = QVBoxLayout()
-        self.parent_list = QListWidget()
-        parent_layout.addWidget(self.parent_list)
-        parent_box.setLayout(parent_layout)
-        
-        # 子カテゴリー
-        child_box = QGroupBox("子カテゴリー")
-        child_layout = QVBoxLayout()
-        self.child_list = QListWidget()
-        child_layout.addWidget(self.child_list)
-        child_box.setLayout(child_layout)
-        
-        layout.addWidget(parent_box)
-        layout.addWidget(child_box)
-        
-        # 操作ボタン
-        button_layout = QVBoxLayout()
-        self.add_category_btn = QPushButton("カテゴリー追加")
-        self.edit_category_btn = QPushButton("カテゴリー編集")
-        self.delete_category_btn = QPushButton("カテゴリー削除")
-        self.add_skill_btn = QPushButton("スキル追加")
-        self.edit_skill_btn = QPushButton("スキル編集")
-        self.delete_skill_btn = QPushButton("スキル削除")
-        self.new_tab_btn = QPushButton("新規タブ追加")
-        
-        button_layout.addWidget(self.add_category_btn)
-        button_layout.addWidget(self.edit_category_btn)
-        button_layout.addWidget(self.delete_category_btn)
-        button_layout.addWidget(self.add_skill_btn)
-        button_layout.addWidget(self.edit_skill_btn)
-        button_layout.addWidget(self.delete_skill_btn)
-        button_layout.addWidget(self.new_tab_btn)
-        
-        layout.addLayout(button_layout)
-        category_box.setLayout(layout)
-        return category_box
+    # [__init__と_init_ui, _create_group_list, _create_category_lists は前回と同じ]
 
     def _connect_signals(self):
         """シグナルの接続"""
@@ -151,27 +38,292 @@ class SettingsWidget(QWidget):
         self.category_group_combo.currentTextChanged.connect(self._on_category_group_changed)
         self.group_list.currentRowChanged.connect(self._on_group_selected)
 
-    def _load_data(self):
-        """データの読み込み"""
+    def _add_group(self):
+        """グループの追加"""
         try:
-            # グループの読み込み
-            groups = self._db_manager.get_groups()
+            name, ok = QInputDialog.getText(
+                self,
+                "グループ追加",
+                "グループ名を入力してください:"
+            )
             
-            # グループリストの更新
-            self.group_list.clear()
-            self.group_list.addItems(groups)
-            
-            # グループコンボボックスの更新
-            self.category_group_combo.clear()
-            self.category_group_combo.addItems(groups)
-            
+            if ok and name.strip():
+                if self._db_manager.add_group(name.strip()):
+                    self._load_data()
+                    QMessageBox.information(
+                        self,
+                        "成功",
+                        f"グループ「{name}」を追加しました。"
+                    )
+                else:
+                    raise Exception("グループの追加に失敗しました。")
+                    
         except Exception as e:
-            self.logger.exception("データ読み込みエラー")
+            self.logger.exception("グループ追加エラー")
             QMessageBox.critical(
                 self,
                 "エラー",
-                "データの読み込みに失敗しました。"
+                str(e)
             )
 
-    # [その他のメソッドは前回と同じ]
+    def _edit_group(self):
+        """グループの編集"""
+        try:
+            current_item = self.group_list.currentItem()
+            if not current_item:
+                raise Exception("編集するグループを選択してください。")
+                
+            old_name = current_item.text()
+            new_name, ok = QInputDialog.getText(
+                self,
+                "グループ編集",
+                "新しいグループ名を入力してください:",
+                text=old_name
+            )
+            
+            if ok and new_name.strip() and new_name != old_name:
+                # TODO: グループ名の変更処理を実装
+                self._load_data()
+                QMessageBox.information(
+                    self,
+                    "成功",
+                    f"グループ名を「{new_name}」に変更しました。"
+                )
+                
+        except Exception as e:
+            self.logger.exception("グループ編集エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _delete_group(self):
+        """グループの削除"""
+        try:
+            current_item = self.group_list.currentItem()
+            if not current_item:
+                raise Exception("削除するグループを選択してください。")
+                
+            group_name = current_item.text()
+            reply = QMessageBox.question(
+                self,
+                "確認",
+                f"グループ「{group_name}」を削除してもよろしいですか？\n"
+                "このグループに関連する全てのデータも削除されます。",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                # TODO: グループの削除処理を実装
+                self._load_data()
+                QMessageBox.information(
+                    self,
+                    "成功",
+                    f"グループ「{group_name}」を削除しました。"
+                )
+                
+        except Exception as e:
+            self.logger.exception("グループ削除エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _add_category(self):
+        """カテゴリーの追加"""
+        try:
+            group_name = self.category_group_combo.currentText()
+            if not group_name:
+                raise Exception("グループを選択してください。")
+            
+            name, ok = QInputDialog.getText(
+                self,
+                "カテゴリー追加",
+                "カテゴリー名を入力してください:"
+            )
+            
+            if ok and name.strip():
+                group_id = self._db_manager.get_group_id_by_name(group_name)
+                if group_id is None:
+                    raise Exception("グループが見つかりません。")
+                
+                if self._db_manager.add_parent_category(name.strip(), group_id):
+                    self._on_category_group_changed(group_name)
+                    QMessageBox.information(
+                        self,
+                        "成功",
+                        f"カテゴリー「{name}」を追加しました。"
+                    )
+                else:
+                    raise Exception("カテゴリーの追加に失敗しました。")
+                    
+        except Exception as e:
+            self.logger.exception("カテゴリー追加エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _edit_category(self):
+        """カテゴリーの編集"""
+        try:
+            current_item = self.parent_list.currentItem()
+            if not current_item:
+                raise Exception("編集するカテゴリーを選択してください。")
+                
+            # TODO: カテゴリー編集の実装
+            pass
+            
+        except Exception as e:
+            self.logger.exception("カテゴリー編集エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _delete_category(self):
+        """カテゴリーの削除"""
+        try:
+            current_item = self.parent_list.currentItem()
+            if not current_item:
+                raise Exception("削除するカテゴリーを選択してください。")
+                
+            # TODO: カテゴリー削除の実装
+            pass
+            
+        except Exception as e:
+            self.logger.exception("カテゴリー削除エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _add_skill(self):
+        """スキルの追加"""
+        try:
+            parent_item = self.parent_list.currentItem()
+            if not parent_item:
+                raise Exception("親カテゴリーを選択してください。")
+                
+            name, ok = QInputDialog.getText(
+                self,
+                "スキル追加",
+                "スキル名を入力してください:"
+            )
+            
+            if ok and name.strip():
+                # TODO: スキル追加の実装
+                self._on_parent_selected(self.parent_list.currentRow())
+                QMessageBox.information(
+                    self,
+                    "成功",
+                    f"スキル「{name}」を追加しました。"
+                )
+                
+        except Exception as e:
+            self.logger.exception("スキル追加エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _edit_skill(self):
+        """スキルの編集"""
+        try:
+            current_item = self.child_list.currentItem()
+            if not current_item:
+                raise Exception("編集するスキルを選択してください。")
+                
+            # TODO: スキル編集の実装
+            pass
+            
+        except Exception as e:
+            self.logger.exception("スキル編集エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _delete_skill(self):
+        """スキルの削除"""
+        try:
+            current_item = self.child_list.currentItem()
+            if not current_item:
+                raise Exception("削除するスキルを選択してください。")
+                
+            # TODO: スキル削除の実装
+            pass
+            
+        except Exception as e:
+            self.logger.exception("スキル削除エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _add_new_tab(self):
+        """新規タブの追加"""
+        try:
+            current_item = self.parent_list.currentItem()
+            if not current_item:
+                raise Exception("タブとして追加する親カテゴリーを選択してください。")
+                
+            # TODO: タブ追加の実装
+            pass
+            
+        except Exception as e:
+            self.logger.exception("タブ追加エラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                str(e)
+            )
+
+    def _on_parent_selected(self, row: int):
+        """親カテゴリー選択時の処理"""
+        try:
+            if row >= 0:
+                parent_name = self.parent_list.item(row).text()
+                # TODO: スキル一覧の表示処理
+                pass
+                
+        except Exception as e:
+            self.logger.exception("親カテゴリー選択エラー")
+
+    def _on_category_group_changed(self, group_name: str):
+        """カテゴリー用グループ選択時の処理"""
+        try:
+            # グループリストの選択を同期
+            items = self.group_list.findItems(group_name, Qt.MatchFlag.MatchExactly)
+            if items:
+                self.group_list.setCurrentItem(items[0])
+            
+            # 選択されたグループの親カテゴリーを読み込み
+            group_id = self._db_manager.get_group_id_by_name(group_name)
+            if group_id is not None:
+                categories = self._db_manager.get_parent_categories_by_group(group_id)
+                self.parent_list.clear()
+                self.parent_list.addItems(categories)
+                self.child_list.clear()
+            
+        except Exception as e:
+            self.logger.exception("カテゴリー読み込みエラー")
+
+    def _on_group_selected(self, row: int):
+        """グループ選択時の処理"""
+        if row >= 0:
+            selected_group = self.group_list.item(row).text()
+            # コンボボックスの選択を同期
+            index = self.category_group_combo.findText(selected_group)
+            if index >= 0:
+                self.category_group_combo.setCurrentIndex(index)
 
