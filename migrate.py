@@ -3,6 +3,7 @@
 import os
 import sys
 import logging
+from pathlib import Path
 
 # ロギング設定
 log_dir = "logs"
@@ -20,12 +21,31 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+def check_migration_files():
+    """マイグレーションファイルの存在確認"""
+    migrations_dir = Path("src/database/migrations")
+    if not migrations_dir.exists():
+        logger.error(f"マイグレーションディレクトリが見つかりません: {migrations_dir}")
+        return False
+    
+    migration_files = list(migrations_dir.glob("V*__.py"))
+    if not migration_files:
+        logger.error("マイグレーションファイルが見つかりません")
+        return False
+    
+    logger.info(f"検出されたマイグレーションファイル: {[f.name for f in migration_files]}")
+    return True
+
 try:
     from src.commands.migrate import run_migrations, rollback_migration
     
     def main():
         """メイン処理"""
+        if not check_migration_files():
+            sys.exit(1)
+        
         db_path = os.getenv('DB_PATH', 'skill_matrix.db')
+        logger.info(f"データベースパス: {db_path}")
         
         try:
             if len(sys.argv) > 1 and sys.argv[1] == "rollback":
