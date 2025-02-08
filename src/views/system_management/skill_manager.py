@@ -14,15 +14,13 @@ class SkillManagerMixin:
                     group_name = self.category_group_combo.currentText()
                     self.logger.info(f"選択されたカテゴリー: {parent_name}, グループ: {group_name}")
                     
-                    # スキル一覧を取得
-                    group_id = self._db_manager.get_group_id_by_name(group_name)
-                    if group_id is not None:
-                        # group_idは不要 - parent_nameのみで取得
-                        skills = self._db_manager.get_skills_by_parent(parent_name)
-                        self.logger.info(f"カテゴリーのスキル: {skills}")
-                        
-                        self.child_list.clear()
-                        self.child_list.addItems(skills)
+                    # カテゴリー名のみでスキル一覧を取得
+                    skills = self._db_manager.get_skills_by_parent(parent_name)
+                    self.logger.info(f"カテゴリーのスキル: {skills}")
+                    
+                    # UIを更新
+                    self.child_list.clear()
+                    self.child_list.addItems(skills)
                 
         except Exception as e:
             self.logger.exception("親カテゴリー選択エラー")
@@ -41,17 +39,12 @@ class SkillManagerMixin:
             )
             
             if ok and name.strip():
-                group_name = self.category_group_combo.currentText()
                 category_name = parent_item.text()
                 
-                group_id = self._db_manager.get_group_id_by_name(group_name)
-                if group_id is None:
-                    raise Exception("グループが見つかりません。")
-                
-                # カテゴリー名とスキル名を渡す
+                # カテゴリー名とスキル名のみを渡す
                 if self._db_manager.add_skill(category_name, name.strip()):
                     self._on_parent_selected(self.parent_list.currentRow())
-                    self.logger.info(f"スキル追加: {name} (カテゴリー: {category_name}, グループ: {group_name})")
+                    self.logger.info(f"スキル追加: {name} (カテゴリー: {category_name})")
                     QMessageBox.information(
                         self,
                         "成功",
@@ -84,9 +77,7 @@ class SkillManagerMixin:
             )
             
             if ok and new_name.strip() and new_name != old_name:
-                category_name = self.parent_list.currentItem().text()
-                
-                # カテゴリー名は不要 - スキル名の変更のみ
+                # 古い名前と新しい名前のみを渡す
                 if self._db_manager.rename_skill(old_name, new_name.strip()):
                     self._on_parent_selected(self.parent_list.currentRow())
                     self.logger.info(f"スキル名変更: {old_name} → {new_name}")
