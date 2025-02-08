@@ -16,7 +16,7 @@ class BaseManagerMixin:
         """
         self.logger = logging.getLogger(__name__)
         self._db_path = db_path
-        self.current_time = "2025-02-08 02:02:04"
+        self.current_time = "2025-02-08 02:06:06"
         
         # 古いDBファイルが存在する場合は削除
         if os.path.exists(self._db_path):
