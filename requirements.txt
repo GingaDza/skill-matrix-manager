@@ -1,4 +1,12 @@
-PyQt5>=5.15.9
-python-dotenv>=1.0.0
-SQLAlchemy>=2.0.23
-pytest>=7.4.3
+# データベース
+sqlite3
+
+# ログ
+python-json-logger
+
+# テスト
+pytest
+pytest-cov
+
+# 型チェック
+mypy
