@@ -1,19 +1,22 @@
 """ベースウィジェットクラス"""
 import logging
 from PyQt6.QtWidgets import QWidget
+from typing import Optional, Any
 
 class BaseWidget(QWidget):
     """全てのウィジェットの基底クラス"""
     
-    def __init__(self, parent=None):
+    def __init__(self, db_manager: Optional[Any] = None, parent: Optional[QWidget] = None):
         """
         初期化
         
         Args:
+            db_manager: データベースマネージャー
             parent: 親ウィジェット
         """
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
+        self._db_manager = db_manager
         
         # UIの初期化
         self.init_ui()

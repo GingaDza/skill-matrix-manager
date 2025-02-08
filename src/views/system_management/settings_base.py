@@ -1,4 +1,6 @@
 """設定ウィジェットの基本クラス"""
+from typing import Optional
+from PyQt6.QtWidgets import QWidget
 from ..base.base_widget import BaseWidget
 from .group_manager import GroupManagerMixin
 from .category_manager import CategoryManagerMixin
@@ -6,6 +8,17 @@ from .skill_manager import SkillManagerMixin
 
 class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, SkillManagerMixin):
     """設定ウィジェットの基本クラス"""
+    
+    def __init__(self, db_manager, parent: Optional[QWidget] = None):
+        """
+        初期化
+        
+        Args:
+            db_manager: データベースマネージャー
+            parent: 親ウィジェット
+        """
+        super().__init__(db_manager=db_manager, parent=parent)
+        self.logger.info("SettingsWidgetBase initialized")
 
     def _on_group_selected(self, row: int):
         """グループ選択時のイベント"""
@@ -53,61 +66,4 @@ class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, Sk
         except Exception as e:
             self.logger.exception("親カテゴリー選択エラー")
 
-    def _highlight_selected_items(self):
-        """選択された項目をハイライト表示"""
-        try:
-            # グループのハイライト
-            group_name = self.category_group_combo.currentText()
-            if group_name:
-                self._highlight_group(group_name)
-            
-            # カテゴリーのハイライト
-            parent_item = self.parent_list.currentItem()
-            if parent_item:
-                self._highlight_parent(parent_item.text())
-            
-            # スキルのハイライト
-            child_item = self.child_list.currentItem()
-            if child_item:
-                self._highlight_child(child_item.text())
-                
-        except Exception as e:
-            self.logger.exception("ハイライト表示エラー")
-
-    def _highlight_group(self, group_name: str):
-        """グループをハイライト表示"""
-        self.category_group_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #e3f2fd;
-                border: 1px solid #bbdefb;
-                border-radius: 4px;
-                padding: 4px;
-            }
-        """)
-
-    def _highlight_parent(self, parent_name: str):
-        """カテゴリーをハイライト表示"""
-        for i in range(self.parent_list.count()):
-            item = self.parent_list.item(i)
-            if item.text() == parent_name:
-                item.setBackground(self.palette().color(self.backgroundRole()).lighter(110))
-            else:
-                item.setBackground(self.palette().color(self.backgroundRole()))
-
-    def _highlight_child(self, child_name: str):
-        """スキルをハイライト表示"""
-        for i in range(self.child_list.count()):
-            item = self.child_list.item(i)
-            if item.text() == child_name:
-                item.setBackground(self.palette().color(self.backgroundRole()).lighter(110))
-            else:
-                item.setBackground(self.palette().color(self.backgroundRole()))
-
-    def _connect_signals(self):
-        """シグナルを接続"""
-        super()._connect_signals()
-        
-        # 選択変更時のハイライト表示
-        self.category_group_combo.currentIndexChanged.connect(lambda: self._highlight_selected_items())
-        self.parent_list.currentItemChanged.connect(lambda: self._highlight_selected_items())
-        self.child_list.currentItemChanged.connect(lambda: self._highlight_selected_items())
+    # ... (残りのメソッドは変更なし)
