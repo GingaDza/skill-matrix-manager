@@ -107,6 +107,18 @@ class PlaceholderListWidget(QFrame):
         """行選択変更時のシグナルを接続"""
         return self.list_widget.currentRowChanged.connect(handler)
 
+    def item(self, row: int):
+        """指定した行のアイテムを取得"""
+        return self.list_widget.item(row)
+
+    def currentRow(self) -> int:
+        """現在選択されている行番号を取得"""
+        return self.list_widget.currentRow()
+
+    def count(self) -> int:
+        """アイテムの総数を取得"""
+        return self.list_widget.count()
+
 class SettingsWidgetBase(BaseWidget, ButtonStateManagerMixin, GroupManagerMixin, CategoryManagerMixin, SkillManagerMixin):
     """設定ウィジェットの基本クラス"""
     
