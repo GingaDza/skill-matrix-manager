@@ -12,148 +12,104 @@ class DatabaseManager:
         self._db_path = db_path
         self._init_db()
     
-    def _init_db(self):
-        """データベースを初期化"""
-        try:
-            with sqlite3.connect(self._db_path) as conn:
-                cursor = conn.cursor()
-                
-                # グループテーブル
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS groups (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT UNIQUE NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                
-                # カテゴリーテーブル
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS categories (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        group_id INTEGER NOT NULL,
-                        parent_id INTEGER,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(name, group_id),
-                        FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
-                        FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
-                    )
-                """)
-                
-                # スキルテーブル
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS skills (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        category_id INTEGER NOT NULL,
-                        min_level INTEGER DEFAULT 1,
-                        max_level INTEGER DEFAULT 5,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(name, category_id),
-                        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-                        CHECK (min_level >= 1 AND min_level <= max_level AND max_level <= 5)
-                    )
-                """)
-                
-                # ユーザーテーブル
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        email TEXT UNIQUE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                
-                # スキルレベルテーブル
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS skill_levels (
-                        user_id INTEGER,
-                        skill_id INTEGER,
-                        level INTEGER,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, skill_id),
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                        FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
-                    )
-                """)
-                
-                conn.commit()
-                self.logger.info(f"データベースの初期化が完了しました: {self._db_path}")
-        except Exception as e:
-            self.logger.exception("データベースの初期化に失敗しました")
-            raise
-
-    def get_groups(self) -> List[str]:
-        """グループ一覧を取得"""
-        try:
-            with sqlite3.connect(self._db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT name FROM groups ORDER BY name")
-                return [row[0] for row in cursor.fetchall()]
-        except Exception as e:
-            self.logger.exception("グループ一覧の取得に失敗しました")
-            raise RuntimeError(f"グループ一覧の取得に失敗しました: {str(e)}")
+    # ... (_init_db と他のメソッドは同じ)
     
-    def add_group(self, name: str):
-        """グループを追加"""
-        try:
-            with sqlite3.connect(self._db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO groups (name) VALUES (?)",
-                    (name,)
-                )
-                conn.commit()
-        except sqlite3.IntegrityError:
-            raise ValueError(f"グループ '{name}' は既に存在します")
-        except Exception as e:
-            self.logger.exception("グループの追加に失敗しました")
-            raise RuntimeError(f"グループの追加に失敗しました: {str(e)}")
-
-    def update_group(self, old_name: str, new_name: str):
-        """グループ名を更新"""
+    def get_categories(self, group_name: str) -> List[Dict[str, Any]]:
+        """カテゴリー一覧を取得"""
         try:
             with sqlite3.connect(self._db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    UPDATE groups 
-                    SET name = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE name = ?
+                    SELECT c.name, p.name
+                    FROM categories c
+                    JOIN groups g ON c.group_id = g.id
+                    LEFT JOIN categories p ON c.parent_id = p.id
+                    WHERE g.name = ?
+                    ORDER BY c.name
                     """,
-                    (new_name, old_name)
+                    (group_name,)
                 )
-                if cursor.rowcount == 0:
-                    raise ValueError(f"グループ '{old_name}' が見つかりません")
-                conn.commit()
-        except sqlite3.IntegrityError:
-            raise ValueError(f"グループ '{new_name}' は既に存在します")
+                return [
+                    {
+                        'name': row[0],
+                        'parent_name': row[1]
+                    }
+                    for row in cursor.fetchall()
+                ]
         except Exception as e:
-            self.logger.exception("グループの更新に失敗しました")
-            raise RuntimeError(f"グループの更新に失敗しました: {str(e)}")
+            self.logger.exception("カテゴリー一覧の取得に失敗しました")
+            raise RuntimeError(f"カテゴリー一覧の取得に失敗しました: {str(e)}")
 
-    def delete_group(self, name: str):
-        """グループを削除"""
+    def get_category(self, name: str, group_name: str) -> Optional[Dict[str, Any]]:
+        """カテゴリー情報を取得"""
         try:
             with sqlite3.connect(self._db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "DELETE FROM groups WHERE name = ?",
-                    (name,)
+                    """
+                    SELECT c.name, p.name
+                    FROM categories c
+                    JOIN groups g ON c.group_id = g.id
+                    LEFT JOIN categories p ON c.parent_id = p.id
+                    WHERE c.name = ? AND g.name = ?
+                    """,
+                    (name, group_name)
                 )
-                if cursor.rowcount == 0:
-                    raise ValueError(f"グループ '{name}' が見つかりません")
-                conn.commit()
+                row = cursor.fetchone()
+                return {
+                    'name': row[0],
+                    'parent_name': row[1]
+                } if row else None
         except Exception as e:
-            self.logger.exception("グループの削除に失敗しました")
-            raise RuntimeError(f"グループの削除に失敗しました: {str(e)}")
+            self.logger.exception("カテゴリー情報の取得に失敗しました")
+            raise RuntimeError(f"カテゴリー情報の取得に失敗しました: {str(e)}")
 
-    # ... (残りのメソッドは前回のコードと同じ)
+    def add_category(self, name: str, group_name: str, parent_name: Optional[str] = None):
+        """カテゴリーを追加"""
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                cursor = conn.cursor()
+                
+                # グループIDを取得
+                cursor.execute(
+                    "SELECT id FROM groups WHERE name = ?",
+                    (group_name,)
+                )
+                group_id = cursor.fetchone()
+                if not group_id:
+                    raise ValueError(f"グループ '{group_name}' が見つかりません")
+                
+                # 親カテゴリーIDを取得（指定されている場合）
+                parent_id = None
+                if parent_name:
+                    cursor.execute(
+                        """
+                        SELECT c.id 
+                        FROM categories c
+                        JOIN groups g ON c.group_id = g.id
+                        WHERE c.name = ? AND g.name = ?
+                        """,
+                        (parent_name, group_name)
+                    )
+                    parent_row = cursor.fetchone()
+                    if not parent_row:
+                        raise ValueError(f"親カテゴリー '{parent_name}' が見つかりません")
+                    parent_id = parent_row[0]
+                
+                # カテゴリーを追加
+                cursor.execute(
+                    """
+                    INSERT INTO categories (name, group_id, parent_id)
+                    VALUES (?, ?, ?)
+                    """,
+                    (name, group_id[0], parent_id)
+                )
+                conn.commit()
+        except sqlite3.IntegrityError:
+            raise ValueError(f"カテゴリー '{name}' は既に存在します")
+        except Exception as e:
+            self.logger.exception("カテゴリーの追加に失敗しました")
+            raise RuntimeError(f"カテゴリーの追加に失敗しました: {str(e)}")
+
+    # ... (他のメソッドは同じ)
