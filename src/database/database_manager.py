@@ -300,3 +300,72 @@ class DatabaseManager:
         except Exception as e:
             self.logger.exception("スキルの削除に失敗しました")
             raise RuntimeError(f"スキルの削除に失敗しました: {str(e)}")
+                    ") VALUES (?, ?, ?, ?, ?, ?)",
+                    (name, description, category_name, group_name,
+                     min_level, max_level)
+                )
+                conn.commit()
+        except Exception as e:
+            self.logger.exception("スキルの追加に失敗しました")
+            raise RuntimeError(f"スキルの追加に失敗しました: {str(e)}")
+    
+    def update_skill(
+        self,
+        old_name: str,
+        new_name: str,
+        category_name: str,
+        group_name: str,
+        description: str = "",
+        min_level: int = 1,
+        max_level: int = 5
+    ):
+        """
+        スキルを更新
+        
+        Args:
+            old_name (str): 現在のスキル名
+            new_name (str): 新しいスキル名
+            category_name (str): カテゴリー名
+            group_name (str): グループ名
+            description (str, optional): 説明
+            min_level (int, optional): 最小レベル
+            max_level (int, optional): 最大レベル
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE skills SET "
+                    "name = ?, description = ?, "
+                    "min_level = ?, max_level = ?, "
+                    "updated_at = CURRENT_TIMESTAMP "
+                    "WHERE name = ? AND category_name = ? AND group_name = ?",
+                    (new_name, description, min_level, max_level,
+                     old_name, category_name, group_name)
+                )
+                conn.commit()
+        except Exception as e:
+            self.logger.exception("スキルの更新に失敗しました")
+            raise RuntimeError(f"スキルの更新に失敗しました: {str(e)}")
+    
+    def delete_skill(self, name: str, category_name: str, group_name: str):
+        """
+        スキルを削除
+        
+        Args:
+            name (str): スキル名
+            category_name (str): カテゴリー名
+            group_name (str): グループ名
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM skills "
+                    "WHERE name = ? AND category_name = ? AND group_name = ?",
+                    (name, category_name, group_name)
+                )
+                conn.commit()
+        except Exception as e:
+            self.logger.exception("スキルの削除に失敗しました")
+            raise RuntimeError(f"スキルの削除に失敗しました: {str(e)}")
