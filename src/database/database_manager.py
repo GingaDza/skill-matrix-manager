@@ -319,3 +319,213 @@ class DatabaseManager:
         except Exception as e:
             self.logger.exception("ユーザーの削除に失敗しました")
             raise
+
+    def get_categories(self, group_name: Optional[str] = None) -> List[str]:
+        """
+        カテゴリー一覧を取得
+        
+        Args:
+            group_name: グループ名（指定された場合はそのグループのカテゴリーのみ取得）
+            
+        Returns:
+            List[str]: カテゴリー名のリスト
+        """
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                cursor = conn.cursor()
+                if group_name:
+                    cursor.execute(
+                        """
+                        SELECT categories.name 
+                        FROM categories 
+                        JOIN groups ON categories.group_id = groups.id 
+                        WHERE groups.name = ? AND categories.parent_id IS NULL
+                        ORDER BY categories.name
+                        """,
+                        (group_name,)
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT name 
+                        FROM categories 
+                        WHERE parent_id IS NULL
+                        ORDER BY name
+                        """
+                    )
+                return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            self.logger.exception("カテゴリーの取得に失敗しました")
+            raise
+
+    def add_category(self, name: str, group_name: str, parent_name: Optional[str] = None) -> None:
+        """
+        カテゴリーを追加
+        
+        Args:
+            name: カテゴリー名
+            group_name: グループ名
+            parent_name: 親カテゴリー名（指定された場合はサブカテゴリーとして追加）
+        """
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                cursor = conn.cursor()
+                if parent_name:
+                    cursor.execute(
+                        """
+                        INSERT INTO categories (name, group_id, parent_id)
+                        VALUES (
+                            ?,
+                            (SELECT id FROM groups WHERE name = ?),
+                            (SELECT id FROM categories WHERE name = ? AND group_id = (
+                                SELECT id FROM groups WHERE name = ?
+                            ))
+                        )
+                        """,
+                        (name, group_name, parent_name, group_name)
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO categories (name, group_id)
+                        VALUES (?, (SELECT id FROM groups WHERE name = ?))
+                        """,
+                        (name, group_name)
+                    )
+                conn.commit()
+        except sqlite3.IntegrityError:
+            raise ValueError(f"カテゴリー名 '{name}' は既に存在します")
+        except Exception as e:
+            self.logger.exception("カテゴリーの追加に失敗しました")
+            raise
+
+    def update_category(self, old_name: str, new_name: str, group_name: str) -> None:
+        """
+        カテゴリー名を更新
+        
+        Args:
+            old_name: 現在のカテゴリー名
+            new_name: 新しいカテゴリー名
+            group_name: グループ名
+        """
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE categories 
+                    SET name = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE name = ? AND group_id = (
+                        SELECT id FROM groups WHERE name = ?
+                    )
+                    """,
+                    (new_name, old_name, group_name)
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError(f"カテゴリー '{old_name}' が見つかりません")
+                conn.commit()
+        except sqlite3.IntegrityError:
+            raise ValueError(f"カテゴリー名 '{new_name}' は既に存在します")
+        except Exception as e:
+            self.logger.exception("カテゴリーの更新に失敗しました")
+            raise
+
+    def delete_category(self, name: str, group_name: str) -> None:
+        """
+        カテゴリーを削除
+        
+        Args:
+            name: カテゴリー名
+            group_name: グループ名
+        """
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                cursor = conn.cursor()
+                # サブカテゴリーとスキルを削除
+                cursor.execute(
+                    """
+                    WITH RECURSIVE subcategories AS (
+                        SELECT id FROM categories
+                        WHERE name = ? AND group_id = (
+                            SELECT id FROM groups WHERE name = ?
+                        )
+                        UNION ALL
+                        SELECT c.id FROM categories c
+                        JOIN subcategories s ON c.parent_id = s.id
+                    )
+                    DELETE FROM skill_levels
+                    WHERE skill_id IN (
+                        SELECT id FROM skills
+                        WHERE category_id IN subcategories
+                    )
+                    """,
+                    (name, group_name)
+                )
+                cursor.execute(
+                    """
+                    WITH RECURSIVE subcategories AS (
+                        SELECT id FROM categories
+                        WHERE name = ? AND group_id = (
+                            SELECT id FROM groups WHERE name = ?
+                        )
+                        UNION ALL
+                        SELECT c.id FROM categories c
+                        JOIN subcategories s ON c.parent_id = s.id
+                    )
+                    DELETE FROM skills
+                    WHERE category_id IN subcategories
+                    """,
+                    (name, group_name)
+                )
+                cursor.execute(
+                    """
+                    WITH RECURSIVE subcategories AS (
+                        SELECT id FROM categories
+                        WHERE name = ? AND group_id = (
+                            SELECT id FROM groups WHERE name = ?
+                        )
+                        UNION ALL
+                        SELECT c.id FROM categories c
+                        JOIN subcategories s ON c.parent_id = s.id
+                    )
+                    DELETE FROM categories
+                    WHERE id IN subcategories
+                    """,
+                    (name, group_name)
+                )
+                if cursor.rowcount == 0:
+                    raise ValueError(f"カテゴリー '{name}' が見つかりません")
+                conn.commit()
+        except Exception as e:
+            self.logger.exception("カテゴリーの削除に失敗しました")
+            raise
+
+    def get_skills(self, category_name: str, group_name: str) -> List[str]:
+        """
+        カテゴリーに属するスキル一覧を取得
+        
+        Args:
+            category_name: カテゴリー名
+            group_name: グループ名
+            
+        Returns:
+            List[str]: スキル名のリスト
+        """
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT skills.name 
+                    FROM skills 
+                    JOIN categories ON skills.category_id = categories.id 
+                    JOIN groups ON categories.group_id = groups.id 
+                    WHERE categories.name = ? AND groups.name = ?
+                    ORDER BY skills.name
+                    """,
+                    (category_name, group_name)
+                )
+                return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            self.logger.exception("スキルの取得に失敗しました")
+            raise
