@@ -3,7 +3,22 @@ from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
 class GroupManagerMixin:
     """グループ管理機能を提供するミックスイン"""
-    
+
+    def _load_initial_data(self):
+        """初期データを読み込む"""
+        try:
+            groups = self._db_manager.get_groups()
+            self.logger.info(f"読み込まれたグループ: {groups}")
+            
+            self.category_group_combo.clear()
+            self.category_group_combo.addItems(groups)
+            
+            # ボタンの状態を更新
+            self._update_button_states()
+            
+        except Exception as e:
+            self.logger.exception("初期データ読み込みエラー")
+            
     def _on_group_selected(self, row: int):
         """グループ選択時のイベント"""
         try:
@@ -45,7 +60,7 @@ class GroupManagerMixin:
             
             if ok and name.strip():
                 if self._db_manager.add_group(name.strip()):
-                    self._load_initial_data()
+                    self._load_initial_data()  # 成功したら再読み込み
                     self.logger.info(f"グループ追加: {name}")
                     QMessageBox.information(
                         self,
@@ -79,7 +94,7 @@ class GroupManagerMixin:
             
             if ok and new_name.strip() and new_name != old_name:
                 if self._db_manager.rename_group(old_name, new_name.strip()):
-                    self._load_initial_data()
+                    self._load_initial_data()  # 成功したら再読み込み
                     self.logger.info(f"グループ名変更: {old_name} → {new_name}")
                     QMessageBox.information(
                         self,
@@ -115,7 +130,7 @@ class GroupManagerMixin:
             
             if reply == QMessageBox.StandardButton.Yes:
                 if self._db_manager.delete_group(group_name):
-                    self._load_initial_data()
+                    self._load_initial_data()  # 成功したら再読み込み
                     self.logger.info(f"グループ削除: {group_name}")
                     QMessageBox.information(
                         self,
@@ -153,6 +168,9 @@ class GroupManagerMixin:
             
             # スキル一覧をクリア
             self.child_list.clear()
+            
+            # ボタンの状態を更新
+            self._update_button_states()
             
         except Exception as e:
             self.logger.exception("カテゴリーグループ変更エラー")
