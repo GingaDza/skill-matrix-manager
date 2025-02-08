@@ -21,34 +21,31 @@ class BaseWidget(QWidget):
     def setup(self):
         """
         ウィジェットのセットアップを行う
-        UIの初期化とシグナルの接続を順序正しく実行する
-        """
-        # UIの初期化
-        self.init_ui()
-        self.logger.info("UI initialized")
         
-        # シグナルの接続
-        self._connect_signals()
-        self.logger.info("Signals connected")
+        Note:
+            1. UIの初期化
+            2. 初期データの読み込み
+            3. シグナルの接続
+            の順で実行される
+        """
+        try:
+            # UIの初期化
+            self.init_ui()
+            self.logger.info("UI initialized")
+            
+            # 初期データの読み込み（存在する場合）
+            if hasattr(self, '_load_initial_data'):
+                self._load_initial_data()
+            
+            # シグナルの接続
+            if hasattr(self, '_connect_signals'):
+                self._connect_signals()
+                self.logger.info("Signals connected")
+        
+        except Exception as e:
+            self.logger.exception("Setup failed")
+            raise
 
     def init_ui(self):
         """UIを初期化する"""
         pass
-
-    def _connect_signals(self):
-        """シグナルを接続する"""
-        pass
-
-    def _disconnect_signals(self):
-        """シグナルの接続を解除する"""
-        pass
-
-    def closeEvent(self, event):
-        """
-        ウィジェットが閉じられる時のイベント
-        
-        Args:
-            event: クローズイベント
-        """
-        self._disconnect_signals()
-        super().closeEvent(event)
