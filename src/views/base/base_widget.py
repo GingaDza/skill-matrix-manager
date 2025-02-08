@@ -17,7 +17,12 @@ class BaseWidget(QWidget):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
         self._db_manager = db_manager
-        
+
+    def setup(self):
+        """
+        ウィジェットのセットアップを行う
+        UIの初期化とシグナルの接続を順序正しく実行する
+        """
         # UIの初期化
         self.init_ui()
         self.logger.info("UI initialized")
