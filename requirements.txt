@@ -1,3 +1,6 @@
-PyQt6>=6.6.1
-psutil>=5.9.8
-objgraph>=3.6.0
+PyQt5==5.15.9
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.12.1
+pytest==7.4.3
+python-dotenv==1.0.0
+SQLAlchemy==2.0.23
