@@ -1,4 +1,2 @@
 """システム管理モジュール"""
-from .widget import SystemManagementWidget
-
-__all__ = ['SystemManagementWidget']
+from .widget import SystemManagementWidget, SystemSettingsTab

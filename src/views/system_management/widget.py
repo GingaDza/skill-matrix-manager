@@ -153,3 +153,5 @@ class SystemSettingsTab(QWidget):
 
     # ... (残りのメソッドは変更なし)
 
+
+__all__ = ['SystemManagementWidget', 'SystemSettingsTab']
