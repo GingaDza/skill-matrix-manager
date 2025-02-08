@@ -2,23 +2,23 @@
 from datetime import datetime
 import os
 
-def get_timestamp() -> str:
-    """現在のタイムスタンプを取得
+class DisplayManager:
+    """表示管理クラス"""
+    
+    @staticmethod
+    def format_timestamp() -> str:
+        """タイムスタンプをフォーマット"""
+        return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    
+    @staticmethod
+    def format_user() -> str:
+        """ユーザー情報をフォーマット"""
+        return os.getenv('USER', os.getenv('USERNAME', 'unknown'))
+    
+    @classmethod
+    def show_info(cls):
+        """情報を表示"""
+        print(f"Timestamp (UTC): {cls.format_timestamp()}")
+        print(f"User: {cls.format_user()}")
 
-    Returns:
-        str: YYYY-MM-DD HH:MM:SS形式のタイムスタンプ
-    """
-    return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-
-def get_username() -> str:
-    """現在のユーザー名を取得
-
-    Returns:
-        str: 現在のユーザー名
-    """
-    return os.getenv('USER', os.getenv('USERNAME', 'unknown'))
-
-def display_info():
-    """タイムスタンプとユーザー情報を表示"""
-    print(f"Current Date and Time (UTC): {get_timestamp()}")
-    print(f"Current User's Login: {get_username()}")
+display_manager = DisplayManager()
