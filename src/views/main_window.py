@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from .system_management import SystemManagementWidget
-from .data_management import DataManagementWidget
 from ..database.database_manager import DatabaseManager
 import logging
 
@@ -72,22 +71,19 @@ class MainWindow(QMainWindow):
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         
-        # タブウィジェット
-        self.tab_widget = QTabWidget()
+        # メインタブウィジェット
+        self.main_tab_widget = QTabWidget()
+        self.main_tab_widget.setMovable(True)  # タブの並び替えを可能にする
         
         # システム管理タブ
         system_tab = SystemManagementWidget(self._db_manager, self)
-        self.tab_widget.addTab(system_tab, "システム管理")
-        
-        # データ管理タブ
-        data_tab = DataManagementWidget(self._db_manager, self)
-        self.tab_widget.addTab(data_tab, "データ管理")
+        self.main_tab_widget.addTab(system_tab, "システム管理")
         
         # 総合評価タブ
-        evaluation_tab = QWidget()  # 総合評価タブの実装は後ほど
-        self.tab_widget.addTab(evaluation_tab, "総合評価")
+        evaluation_tab = QWidget()  # TODO: 総合評価タブの実装
+        self.main_tab_widget.addTab(evaluation_tab, "総合評価")
         
-        right_layout.addWidget(self.tab_widget)
+        right_layout.addWidget(self.main_tab_widget)
         splitter.addWidget(right_panel)
         
         # スプリッターの比率を3:7に設定
@@ -101,7 +97,9 @@ class MainWindow(QMainWindow):
         self.group_combo.clear()
         try:
             groups = self._db_manager.get_groups()
-            self.group_combo.addItems(groups)
+            if groups:
+                self.group_combo.addItems(groups)
+                self.group_combo.setCurrentIndex(0)
         except Exception as e:
             self.logger.exception("グループの読み込みに失敗しました")
             QMessageBox.critical(
@@ -122,7 +120,9 @@ class MainWindow(QMainWindow):
             
         try:
             users = self._db_manager.get_users(group_name)
-            self.user_list.addItems(users)
+            if users:
+                for user in users:
+                    self.user_list.addItem(user['name'])
         except Exception as e:
             self.logger.exception("ユーザーの読み込みに失敗しました")
             QMessageBox.critical(
@@ -133,18 +133,85 @@ class MainWindow(QMainWindow):
 
     def _add_user(self):
         """ユーザーを追加する"""
-        # TODO: ユーザー追加ダイアログを実装
-        pass
+        group_name = self.group_combo.currentText()
+        if not group_name:
+            QMessageBox.warning(self, "警告", "グループを選択してください")
+            return
+
+        from .dialogs import AddUserDialog
+        dialog = AddUserDialog(self)
+        if dialog.exec_():
+            name = dialog.name
+            email = dialog.email
+            try:
+                self._db_manager.add_user(name, group_name, email)
+                self._load_users(group_name)
+                self.logger.info(f"ユーザーを追加しました: {name} (グループ: {group_name})")
+            except Exception as e:
+                self.logger.exception("ユーザーの追加に失敗しました")
+                QMessageBox.critical(
+                    self,
+                    "エラー",
+                    f"ユーザーの追加に失敗しました: {str(e)}"
+                )
 
     def _edit_user(self):
         """ユーザーを編集する"""
-        # TODO: ユーザー編集ダイアログを実装
-        pass
+        current_item = self.user_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "警告", "編集するユーザーを選択してください")
+            return
+
+        group_name = self.group_combo.currentText()
+        old_name = current_item.text()
+
+        from .dialogs import EditUserDialog
+        dialog = EditUserDialog(self, old_name)
+        if dialog.exec_():
+            new_name = dialog.name
+            email = dialog.email
+            try:
+                self._db_manager.update_user(old_name, new_name, group_name)
+                self._load_users(group_name)
+                self.logger.info(f"ユーザーを更新しました: {old_name} -> {new_name}")
+            except Exception as e:
+                self.logger.exception("ユーザーの更新に失敗しました")
+                QMessageBox.critical(
+                    self,
+                    "エラー",
+                    f"ユーザーの更新に失敗しました: {str(e)}"
+                )
 
     def _delete_user(self):
         """ユーザーを削除する"""
-        # TODO: ユーザー削除確認ダイアログを実装
-        pass
+        current_item = self.user_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "警告", "削除するユーザーを選択してください")
+            return
+
+        group_name = self.group_combo.currentText()
+        name = current_item.text()
+
+        reply = QMessageBox.question(
+            self,
+            "確認",
+            f"ユーザー「{name}」を削除してもよろしいですか？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                self._db_manager.delete_user(name, group_name)
+                self._load_users(group_name)
+                self.logger.info(f"ユーザーを削除しました: {name}")
+            except Exception as e:
+                self.logger.exception("ユーザーの削除に失敗しました")
+                QMessageBox.critical(
+                    self,
+                    "エラー",
+                    f"ユーザーの削除に失敗しました: {str(e)}"
+                )
 
     def closeEvent(self, event):
         """ウィンドウを閉じる際の処理"""
@@ -161,3 +228,11 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
+
+    def add_custom_tab(self, title: str, widget: QWidget):
+        """カスタムタブを追加"""
+        self.main_tab_widget.insertTab(
+            self.main_tab_widget.count() - 2,  # 総合評価とシステム管理タブの前
+            widget,
+            title
+        )
