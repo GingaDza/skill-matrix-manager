@@ -17,8 +17,8 @@ class SkillManagerMixin:
                     # スキル一覧を取得
                     group_id = self._db_manager.get_group_id_by_name(group_name)
                     if group_id is not None:
-                        # 引数を2つに修正
-                        skills = self._db_manager.get_skills_by_parent(group_id, parent_name)
+                        # group_idは不要 - parent_nameのみで取得
+                        skills = self._db_manager.get_skills_by_parent(parent_name)
                         self.logger.info(f"カテゴリーのスキル: {skills}")
                         
                         self.child_list.clear()
@@ -48,8 +48,8 @@ class SkillManagerMixin:
                 if group_id is None:
                     raise Exception("グループが見つかりません。")
                 
-                # 引数を3つに修正 (self + 2)
-                if self._db_manager.add_skill(name.strip(), category_name):
+                # カテゴリー名とスキル名を渡す
+                if self._db_manager.add_skill(category_name, name.strip()):
                     self._on_parent_selected(self.parent_list.currentRow())
                     self.logger.info(f"スキル追加: {name} (カテゴリー: {category_name}, グループ: {group_name})")
                     QMessageBox.information(
@@ -84,13 +84,12 @@ class SkillManagerMixin:
             )
             
             if ok and new_name.strip() and new_name != old_name:
-                group_name = self.category_group_combo.currentText()
                 category_name = self.parent_list.currentItem().text()
                 
-                # 引数を2つに修正
+                # カテゴリー名は不要 - スキル名の変更のみ
                 if self._db_manager.rename_skill(old_name, new_name.strip()):
                     self._on_parent_selected(self.parent_list.currentRow())
-                    self.logger.info(f"スキル名変更: {old_name} → {new_name} (カテゴリー: {category_name}, グループ: {group_name})")
+                    self.logger.info(f"スキル名変更: {old_name} → {new_name}")
                     QMessageBox.information(
                         self,
                         "成功",
@@ -125,13 +124,10 @@ class SkillManagerMixin:
             )
             
             if reply == QMessageBox.StandardButton.Yes:
-                group_name = self.category_group_combo.currentText()
-                category_name = self.parent_list.currentItem().text()
-                
-                # 引数を2つに修正
-                if self._db_manager.delete_skill(skill_name, category_name):
+                # スキル名のみで削除
+                if self._db_manager.delete_skill(skill_name):
                     self._on_parent_selected(self.parent_list.currentRow())
-                    self.logger.info(f"スキル削除: {skill_name} (カテゴリー: {category_name}, グループ: {group_name})")
+                    self.logger.info(f"スキル削除: {skill_name}")
                     QMessageBox.information(
                         self,
                         "成功",
