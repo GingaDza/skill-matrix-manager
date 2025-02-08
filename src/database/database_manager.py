@@ -10,7 +10,7 @@ class DatabaseManager:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-08 00:08:46"
+        self.current_time = "2025-02-08 00:10:31"
         
         try:
             self._init_database()
