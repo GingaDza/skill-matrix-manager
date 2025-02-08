@@ -372,6 +372,8 @@ class SettingsWidget(QWidget):
                 str(e)
             )
 
+
+
     def on_add_skill(self):
         """スキル追加ボタンのクリックイベント"""
         try:
@@ -379,6 +381,7 @@ class SettingsWidget(QWidget):
             if not parent_item:
                 raise Exception("親カテゴリーを選択してください。")
                 
+            name, ok = QInputDialog.getText(
                 self,
                 "スキル追加",
                 "スキル名を入力してください:"
