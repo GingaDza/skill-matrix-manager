@@ -1,11 +1,5 @@
 """ダイアログモジュール"""
-
+from .user_dialog import AddUserDialog, EditUserDialog
 from .group_dialog import GroupDialog
 from .category_dialog import CategoryDialog
-from .skill_dialog import SkillDialog
-
-__all__ = [
-    'GroupDialog',
-    'CategoryDialog',
-    'SkillDialog'
-]
+from .skill_dialog import EditSkillDialog
