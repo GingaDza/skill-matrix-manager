@@ -1,7 +1,7 @@
 """マイグレーションコマンド"""
 import os
 import sys
-import importlib
+import importlib.util
 import logging
 from typing import List
 from pathlib import Path
@@ -38,15 +38,16 @@ def run_migrations(db_path: str):
         display.show_message("適用可能なマイグレーションが見つかりません", "warning")
         return
     
+    display.show_message(f"検出されたマイグレーション: {[v for v, _ in migration_files]}", "info")
+    
     for version, file in migration_files:
         if version in applied:
             display.show_message(f"マイグレーション {version} は既に適用済みです", "info")
             continue
         
         try:
-            # パッケージパスを正しく設定
-            module_name = f"{file.parent.parent.name}.{file.parent.name}.{file.stem}"
-            spec = importlib.util.spec_from_file_location(module_name, file)
+            # モジュールを動的にインポート
+            spec = importlib.util.spec_from_file_location(f"migrations.{file.stem}", file)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             
@@ -75,13 +76,11 @@ def rollback_migration(db_path: str, version: str):
         return
     
     try:
-        # マイグレーションファイルを検索
         migrations_dir = Path(__file__).parent.parent / "database" / "migrations"
         file = next(migrations_dir.glob(f"{version}__.py"))
         
         # モジュールを動的にインポート
-        module_name = f"{file.parent.parent.name}.{file.parent.name}.{file.stem}"
-        spec = importlib.util.spec_from_file_location(module_name, file)
+        spec = importlib.util.spec_from_file_location(f"migrations.{file.stem}", file)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         

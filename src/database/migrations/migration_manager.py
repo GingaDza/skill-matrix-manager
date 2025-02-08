@@ -49,9 +49,7 @@ class MigrationManager:
         try:
             with sqlite3.connect(self._db_path) as conn:
                 cursor = conn.cursor()
-                # マイグレーションSQLを実行
                 cursor.executescript(up_sql)
-                # マイグレーション履歴を記録
                 cursor.execute(
                     f"INSERT INTO {self._migrations_table} (version, name) VALUES (?, ?)",
                     (version, name)
@@ -67,9 +65,7 @@ class MigrationManager:
         try:
             with sqlite3.connect(self._db_path) as conn:
                 cursor = conn.cursor()
-                # ロールバックSQLを実行
                 cursor.executescript(down_sql)
-                # マイグレーション履歴を削除
                 cursor.execute(
                     f"DELETE FROM {self._migrations_table} WHERE version = ?",
                     (version,)

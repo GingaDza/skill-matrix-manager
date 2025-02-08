@@ -68,48 +68,11 @@ def up():
             UNIQUE(user_id, skill_id),
             CHECK (level >= 1 AND level <= 5)
         );
-
-        -- トリガーの作成（updated_at自動更新用）
-        CREATE TRIGGER IF NOT EXISTS update_users_timestamp 
-        AFTER UPDATE ON users
-        BEGIN
-            UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS update_groups_timestamp
-        AFTER UPDATE ON groups
-        BEGIN
-            UPDATE groups SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS update_categories_timestamp
-        AFTER UPDATE ON categories
-        BEGIN
-            UPDATE categories SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS update_skills_timestamp
-        AFTER UPDATE ON skills
-        BEGIN
-            UPDATE skills SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS update_user_skills_timestamp
-        AFTER UPDATE ON user_skills
-        BEGIN
-            UPDATE user_skills SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
     """
 
 def down():
     """ロールバック実行"""
     return """
-        DROP TRIGGER IF EXISTS update_user_skills_timestamp;
-        DROP TRIGGER IF EXISTS update_skills_timestamp;
-        DROP TRIGGER IF EXISTS update_categories_timestamp;
-        DROP TRIGGER IF EXISTS update_groups_timestamp;
-        DROP TRIGGER IF EXISTS update_users_timestamp;
-        
         DROP TABLE IF EXISTS user_skills;
         DROP TABLE IF EXISTS skills;
         DROP TABLE IF EXISTS categories;

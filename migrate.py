@@ -31,40 +31,42 @@ def check_migration_files():
     migration_files = list(migrations_dir.glob("V*__.py"))
     if not migration_files:
         logger.error("マイグレーションファイルが見つかりません")
+        print(f"\n現在のディレクトリ: {os.getcwd()}")
+        print(f"検索パス: {migrations_dir}")
+        print("\n以下のファイルが必要です:")
+        print("- src/database/migrations/V1__initial_schema.py\n")
         return False
     
     logger.info(f"検出されたマイグレーションファイル: {[f.name for f in migration_files]}")
     return True
 
-try:
-    from src.commands.migrate import run_migrations, rollback_migration
+def main():
+    """メイン処理"""
+    if not check_migration_files():
+        sys.exit(1)
     
-    def main():
-        """メイン処理"""
-        if not check_migration_files():
-            sys.exit(1)
+    try:
+        from src.commands.migrate import run_migrations, rollback_migration
         
         db_path = os.getenv('DB_PATH', 'skill_matrix.db')
         logger.info(f"データベースパス: {db_path}")
         
-        try:
-            if len(sys.argv) > 1 and sys.argv[1] == "rollback":
-                if len(sys.argv) != 3:
-                    print("使用方法: python migrate.py rollback <version>")
-                    sys.exit(1)
-                rollback_migration(db_path, sys.argv[2])
-            else:
-                run_migrations(db_path)
-        
-        except Exception as e:
-            logger.exception("マイグレーション処理でエラーが発生しました")
-            sys.exit(1)
+        if len(sys.argv) > 1 and sys.argv[1] == "rollback":
+            if len(sys.argv) != 3:
+                print("使用方法: python migrate.py rollback <version>")
+                sys.exit(1)
+            rollback_migration(db_path, sys.argv[2])
+        else:
+            run_migrations(db_path)
+    
+    except ImportError as e:
+        logger.error(f"必要なモジュールのインポートに失敗しました: {e}")
+        print("\n以下のコマンドで必要なパッケージをインストールしてください：")
+        print("pip install -r requirements.txt\n")
+        sys.exit(1)
+    except Exception as e:
+        logger.exception("マイグレーション処理でエラーが発生しました")
+        sys.exit(1)
 
-    if __name__ == "__main__":
-        main()
-
-except ImportError as e:
-    logger.error(f"必要なモジュールのインポートに失敗しました: {e}")
-    print("\n以下のコマンドで必要なパッケージをインストールしてください：")
-    print("pip install -r requirements.txt\n")
-    sys.exit(1)
+if __name__ == "__main__":
+    main()
