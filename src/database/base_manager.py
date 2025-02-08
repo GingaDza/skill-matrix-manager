@@ -4,8 +4,8 @@ import os
 import logging
 from typing import List, Optional, Tuple
 
-class BaseManager:
-    """データベースの基本操作を管理するクラス"""
+class BaseManagerMixin:
+    """データベースの基本操作を提供するミックスイン"""
 
     def __init__(self, db_path: str = "skill_matrix.db"):
         """
@@ -16,7 +16,7 @@ class BaseManager:
         """
         self.db_path = db_path
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-08 02:48:42"
+        self.current_time = "2025-02-08 03:12:16"
         
         # 古いデータベースを削除
         if os.path.exists(db_path):
@@ -272,6 +272,7 @@ class BaseManager:
                     """,
                     (name, category_name, self.current_time, self.current_time)
                 )
+                conn.commit()
                 return True
         except sqlite3.IntegrityError:
             return False
@@ -302,6 +303,7 @@ class BaseManager:
                     """,
                     (new_name, self.current_time, old_name, category_name)
                 )
+                conn.commit()
                 return cursor.rowcount > 0
         except sqlite3.IntegrityError:
             return False
@@ -323,4 +325,5 @@ class BaseManager:
                 "DELETE FROM skills WHERE name = ? AND category_name = ?",
                 (name, category_name)
             )
+            conn.commit()
             return cursor.rowcount > 0
