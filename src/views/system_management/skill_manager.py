@@ -3,24 +3,33 @@ from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
 class SkillManagerMixin:
     """スキル管理機能を提供するミックスイン"""
-    
+
     def _on_parent_selected(self, row: int):
-        """親カテゴリー選択時のイベント"""
+        """
+        親カテゴリー選択時のイベント
+        
+        Args:
+            row (int): 選択された行番号
+        """
         try:
-            if row >= 0:
-                parent_item = self.parent_list.item(row)
-                if parent_item:
-                    parent_name = parent_item.text()
-                    group_name = self.category_group_combo.currentText()
-                    self.logger.info(f"選択されたカテゴリー: {parent_name}, グループ: {group_name}")
-                    
-                    # カテゴリー名のみでスキル一覧を取得
-                    skills = self._db_manager.get_skills_by_parent(parent_name)
-                    self.logger.info(f"カテゴリーのスキル: {skills}")
-                    
-                    # UIを更新
-                    self.child_list.clear()
-                    self.child_list.addItems(skills)
+            self.logger.info(f"カテゴリー選択: {row}")
+            parent_text = self.parent_list.currentItem().text() if self.parent_list.currentItem() else None
+            
+            if parent_text:
+                # スキル一覧を取得
+                skills = self._db_manager.get_skills_by_parent(parent_text)
+                self.logger.info(f"カテゴリーのスキル: {skills}")
+                
+                # スキル一覧を更新
+                self.child_list.clear()
+                self.child_list.addItems(skills)
+                
+                # ボタンの状態を更新
+                self._update_button_states()
+                
+            else:
+                # スキル一覧をクリア
+                self.child_list.clear()
                 
         except Exception as e:
             self.logger.exception("親カテゴリー選択エラー")
@@ -30,7 +39,7 @@ class SkillManagerMixin:
         try:
             parent_item = self.parent_list.currentItem()
             if not parent_item:
-                raise Exception("親カテゴリーを選択してください。")
+                raise Exception("カテゴリーを選択してください。")
                 
             name, ok = QInputDialog.getText(
                 self,
@@ -39,12 +48,10 @@ class SkillManagerMixin:
             )
             
             if ok and name.strip():
-                category_name = parent_item.text()
-                
-                # カテゴリー名とスキル名のみを渡す
-                if self._db_manager.add_skill(category_name, name.strip()):
-                    self._on_parent_selected(self.parent_list.currentRow())
-                    self.logger.info(f"スキル追加: {name} (カテゴリー: {category_name})")
+                parent_text = parent_item.text()
+                if self._db_manager.add_skill(name.strip(), parent_text):
+                    self._on_parent_selected(self.parent_list.currentRow())  # スキル一覧を更新
+                    self.logger.info(f"スキル追加: {name} (カテゴリー: {parent_text})")
                     QMessageBox.information(
                         self,
                         "成功",
@@ -64,11 +71,17 @@ class SkillManagerMixin:
     def _on_edit_skill(self):
         """スキル編集"""
         try:
-            current_item = self.child_list.currentItem()
-            if not current_item:
+            child_item = self.child_list.currentItem()
+            if not child_item:
                 raise Exception("編集するスキルを選択してください。")
                 
-            old_name = current_item.text()
+            parent_item = self.parent_list.currentItem()
+            if not parent_item:
+                raise Exception("カテゴリーを選択してください。")
+                
+            old_name = child_item.text()
+            parent_text = parent_item.text()
+            
             new_name, ok = QInputDialog.getText(
                 self,
                 "スキル編集",
@@ -77,9 +90,8 @@ class SkillManagerMixin:
             )
             
             if ok and new_name.strip() and new_name != old_name:
-                # 古い名前と新しい名前のみを渡す
-                if self._db_manager.rename_skill(old_name, new_name.strip()):
-                    self._on_parent_selected(self.parent_list.currentRow())
+                if self._db_manager.rename_skill(old_name, new_name.strip(), parent_text):
+                    self._on_parent_selected(self.parent_list.currentRow())  # スキル一覧を更新
                     self.logger.info(f"スキル名変更: {old_name} → {new_name}")
                     QMessageBox.information(
                         self,
@@ -100,24 +112,28 @@ class SkillManagerMixin:
     def _on_delete_skill(self):
         """スキル削除"""
         try:
-            current_item = self.child_list.currentItem()
-            if not current_item:
+            child_item = self.child_list.currentItem()
+            if not child_item:
                 raise Exception("削除するスキルを選択してください。")
                 
-            skill_name = current_item.text()
+            parent_item = self.parent_list.currentItem()
+            if not parent_item:
+                raise Exception("カテゴリーを選択してください。")
+                
+            skill_name = child_item.text()
+            parent_text = parent_item.text()
+            
             reply = QMessageBox.question(
                 self,
                 "確認",
-                f"スキル「{skill_name}」を削除してもよろしいですか？\n"
-                "このスキルに関連する全ての評価データも削除されます。",
+                f"スキル「{skill_name}」を削除してもよろしいですか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
             
             if reply == QMessageBox.StandardButton.Yes:
-                # スキル名のみで削除
-                if self._db_manager.delete_skill(skill_name):
-                    self._on_parent_selected(self.parent_list.currentRow())
+                if self._db_manager.delete_skill(skill_name, parent_text):
+                    self._on_parent_selected(self.parent_list.currentRow())  # スキル一覧を更新
                     self.logger.info(f"スキル削除: {skill_name}")
                     QMessageBox.information(
                         self,
