@@ -1,35 +1,20 @@
 #!/usr/bin/env python3
-"""アプリケーションのエントリーポイント"""
+"""アプリケーション実行スクリプト"""
 import sys
 import logging
 from src.app import App
 
-def setup_logging():
-    """ロギングの設定"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('app.log')
-        ]
-    )
-
 def main():
-    """メインエントリーポイント"""
+    """メイン関数"""
+    logger = logging.getLogger(__name__)
+    logger.info("アプリケーションを起動します")
+    
     try:
-        setup_logging()
-        logger = logging.getLogger(__name__)
-        logger.info("アプリケーションを起動します")
-        
         app = App(sys.argv)
-        exit_code = app.run()
-        
-        logger.info("アプリケーションを終了します")
-        return exit_code
+        app.run()
     except Exception as e:
-        logging.getLogger(__name__).exception("予期せぬエラーが発生しました")
-        return 1
+        logger.error("予期せぬエラーが発生しました", exc_info=True)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
