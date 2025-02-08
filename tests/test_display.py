@@ -6,10 +6,13 @@ from src.utils.display import DisplayManager
 class TestDisplayManager(unittest.TestCase):
     """DisplayManagerのテスト"""
     
+    def setUp(self):
+        """テストの準備"""
+        self.display = DisplayManager()
+    
     def test_format_timestamp(self):
         """タイムスタンプのフォーマットをテスト"""
-        timestamp = DisplayManager.format_timestamp()
-        # タイムスタンプが正しい形式かチェック
+        timestamp = self.display.format_timestamp()
         try:
             datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
         except ValueError:
@@ -17,9 +20,16 @@ class TestDisplayManager(unittest.TestCase):
     
     def test_format_user(self):
         """ユーザー情報のフォーマットをテスト"""
-        user = DisplayManager.format_user()
+        user = self.display.format_user()
         self.assertIsInstance(user, str)
         self.assertGreater(len(user), 0)
+    
+    def test_format_header(self):
+        """ヘッダーフォーマットのテスト"""
+        text = "Test Header"
+        header = self.display.format_header(text)
+        self.assertIn(text, header)
+        self.assertEqual(len(header), 80)
 
 if __name__ == '__main__':
     unittest.main()
