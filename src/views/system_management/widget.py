@@ -142,7 +142,7 @@ class SystemSettingsTab(QWidget):
         else:
             self.skill_manager.clear_skills()
         self.add_tab_btn.setEnabled(bool(category_name))
-
+    
     def get_selected_group(self) -> str:
         """選択中のグループ名を取得"""
         return self.group_combo.currentText()
@@ -150,8 +150,72 @@ class SystemSettingsTab(QWidget):
     def get_selected_category(self) -> str:
         """選択中のカテゴリー名を取得"""
         return self.category_manager.get_selected_category()
+    
+    def _add_custom_tab(self):
+        """新規カスタムタブを追加"""
+        group_name = self.get_selected_group()
+        category_name = self.get_selected_category()
+        
+        if not group_name or not category_name:
+            QMessageBox.warning(
+                self,
+                "警告",
+                "新規タブを追加するグループとカテゴリーを選択してください"
+            )
+            return
+            
+        try:
+            # メインウィンドウのタブウィジェットにカスタムタブを追加
+            main_window = self.window()
+            if main_window:
+                category_tab = CategoryTab(
+                    self._db,
+                    group_name,
+                    category_name
+                )
+                main_window.add_custom_tab(category_name, category_tab)
+                self.logger.info(
+                    f"新規タブを追加しました: {category_name} "
+                    f"(グループ: {group_name})"
+                )
+        except Exception as e:
+            self.logger.exception("新規タブの追加に失敗しました")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                f"新規タブの追加に失敗しました: {str(e)}"
+            )
 
-    # ... (残りのメソッドは変更なし)
+class SystemManagementWidget(QWidget):
+    """システム管理ウィジェットクラス"""
+    
+    # グループ変更シグナル
+    group_changed = pyqtSignal(str)
+    
+    def __init__(self, db_manager: DatabaseManager, parent=None):
+        super().__init__(parent)
+        self.logger = logging.getLogger(__name__)
+        self._db = db_manager
+        self._init_ui()
+    
+    def _init_ui(self):
+        """UIの初期化"""
+        layout = QVBoxLayout()
+        
+        # タブウィジェット
+        tab_widget = QTabWidget()
+        
+        # 初期設定タブ
+        self.settings_tab = SystemSettingsTab(self._db)
+        self.settings_tab.group_changed.connect(self.group_changed)
+        tab_widget.addTab(self.settings_tab, "初期設定")
+        
+        # データ管理タブ
+        data_tab = DataManagementWidget(self._db)
+        tab_widget.addTab(data_tab, "データ管理")
+        
+        layout.addWidget(tab_widget)
+        self.setLayout(layout)
 
-
+# 明示的にクラスをエクスポート
 __all__ = ['SystemManagementWidget', 'SystemSettingsTab']
