@@ -10,10 +10,17 @@ import logging
 class DataManagementWidget(QWidget):
     """データ管理ウィジェットクラス"""
     
-    def __init__(self, db_manager: DatabaseManager):
-        super().__init__()
+    def __init__(self, db_manager: DatabaseManager, parent=None):
+        """
+        初期化
+        
+        Args:
+            db_manager: データベースマネージャー
+            parent: 親ウィジェット
+        """
+        super().__init__(parent)
         self.logger = logging.getLogger(__name__)
-        self._db_manager = db_manager
+        self._db = db_manager
         self._init_ui()
 
     def _init_ui(self):
@@ -68,7 +75,7 @@ class DataManagementWidget(QWidget):
         )
         if filename:
             try:
-                self._db_manager.import_group_data(filename)
+                self._db.import_group_data(filename)
                 QMessageBox.information(
                     self,
                     "成功",
@@ -92,7 +99,7 @@ class DataManagementWidget(QWidget):
         )
         if filename:
             try:
-                self._db_manager.import_category_data(filename)
+                self._db.import_category_data(filename)
                 QMessageBox.information(
                     self,
                     "成功",
@@ -116,7 +123,7 @@ class DataManagementWidget(QWidget):
         )
         if filename:
             try:
-                self._db_manager.import_skill_data(filename)
+                self._db.import_skill_data(filename)
                 QMessageBox.information(
                     self,
                     "成功",
@@ -140,7 +147,7 @@ class DataManagementWidget(QWidget):
         )
         if filename:
             try:
-                self._db_manager.export_data(filename)
+                self._db.export_data(filename)
                 QMessageBox.information(
                     self,
                     "成功",
@@ -164,7 +171,7 @@ class DataManagementWidget(QWidget):
         )
         if filename:
             try:
-                self._db_manager.export_chart(filename)
+                self._db.export_chart(filename)
                 QMessageBox.information(
                     self,
                     "成功",

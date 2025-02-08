@@ -76,11 +76,11 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         
         # システム管理タブ
-        system_tab = SystemManagementWidget(self._db_manager)
+        system_tab = SystemManagementWidget(self._db_manager, self)
         self.tab_widget.addTab(system_tab, "システム管理")
         
         # データ管理タブ
-        data_tab = DataManagementWidget(self._db_manager)
+        data_tab = DataManagementWidget(self._db_manager, self)
         self.tab_widget.addTab(data_tab, "データ管理")
         
         # 総合評価タブ
