@@ -3,6 +3,7 @@ import os
 import sqlite3
 import logging
 from typing import Optional, Tuple, List
+from pathlib import Path
 from .interfaces import IDataManager
 from .exceptions import DatabaseError, EntityNotFoundError
 
@@ -11,17 +12,20 @@ class DatabaseManager(IDataManager):
     
     def __init__(self, db_path: str = "skill_matrix.db"):
         """初期化"""
-        self.db_path = db_path
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-08 03:29:29"
+        self.current_time = "2025-02-08 03:30:47"
         
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        # データベースパスの処理
+        self.db_path = Path(db_path)
+        if self.db_path.parent != Path('.'):
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            
         self._init_db()
-        self.logger.info("データベースの初期化が完了しました")
+        self.logger.info(f"データベースの初期化が完了しました: {self.db_path}")
 
     def _init_db(self):
         """データベースを初期化する"""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(str(self.db_path)) as conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA foreign_keys = ON")
             
@@ -70,7 +74,7 @@ class DatabaseManager(IDataManager):
     def add_group(self, name: str) -> bool:
         """グループを追加"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(str(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO groups (name, created_at, updated_at) VALUES (?, ?, ?)",
@@ -87,7 +91,7 @@ class DatabaseManager(IDataManager):
     def get_group_id_by_name(self, name: str) -> Optional[int]:
         """グループ名からIDを取得"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(str(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT id FROM groups WHERE name = ?", (name,))
                 result = cursor.fetchone()
@@ -103,7 +107,7 @@ class DatabaseManager(IDataManager):
     def get_category_id_by_name(self, name: str, group_name: str) -> Optional[int]:
         """カテゴリー名からIDを取得"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(str(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT id FROM categories WHERE name = ? AND group_name = ?",
@@ -122,7 +126,7 @@ class DatabaseManager(IDataManager):
     def get_group_by_id(self, group_id: int) -> Tuple[str, str, str]:
         """グループIDからグループ情報を取得"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(str(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT name, created_at, updated_at FROM groups WHERE id = ?",
