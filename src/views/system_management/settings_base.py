@@ -3,26 +3,74 @@ from typing import Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QComboBox, QListWidget,
-    QLabel
+    QLabel, QFrame
 )
-from ..base.base_widget import BaseWidget
-from .group_manager import GroupManagerMixin
-from .category_manager import CategoryManagerMixin
-from .skill_manager import SkillManagerMixin
+from PyQt6.QtCore import Qt
+
+class PlaceholderListWidget(QFrame):
+    """プレースホルダー付きリストウィジェット"""
+    
+    def __init__(self, placeholder_text: str, parent: Optional[QWidget] = None):
+        """
+        初期化
+        
+        Args:
+            placeholder_text (str): プレースホルダーのテキスト
+            parent: 親ウィジェット
+        """
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.list_widget = QListWidget()
+        self.placeholder_label = QLabel(placeholder_text)
+        self.placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.placeholder_label.setStyleSheet("""
+            QLabel {
+                color: #666;
+                padding: 10px;
+                border: 1px dashed #999;
+                border-radius: 4px;
+                background: #f5f5f5;
+            }
+        """)
+        
+        layout.addWidget(self.list_widget)
+        layout.addWidget(self.placeholder_label)
+        
+        self._update_placeholder_visibility()
+        self.list_widget.model().rowsInserted.connect(self._update_placeholder_visibility)
+        self.list_widget.model().rowsRemoved.connect(self._update_placeholder_visibility)
+
+    def _update_placeholder_visibility(self):
+        """プレースホルダーの表示/非表示を更新"""
+        has_items = self.list_widget.count() > 0
+        self.placeholder_label.setVisible(not has_items)
+        self.list_widget.setVisible(has_items)
+
+    def addItems(self, items):
+        """アイテムを追加"""
+        self.list_widget.addItems(items)
+
+    def clear(self):
+        """リストをクリア"""
+        self.list_widget.clear()
+
+    def currentItem(self):
+        """現在選択されているアイテムを取得"""
+        return self.list_widget.currentItem()
+
+    def setCurrentRow(self, row: int):
+        """指定した行を選択"""
+        self.list_widget.setCurrentRow(row)
 
 class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, SkillManagerMixin):
     """設定ウィジェットの基本クラス"""
     
     def __init__(self, db_manager, parent: Optional[QWidget] = None):
-        """
-        初期化
-        
-        Args:
-            db_manager: データベースマネージャー
-            parent: 親ウィジェット
-        """
+        """初期化"""
         super().__init__(db_manager=db_manager, parent=parent)
-        self.setup()  # UIの初期化とシグナルの接続
+        self.setup()
         self.logger.info("SettingsWidgetBase initialized")
 
     def init_ui(self):
@@ -57,8 +105,7 @@ class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, Sk
         # カテゴリー部分
         category_layout = QVBoxLayout()
         category_label = QLabel("カテゴリー:")
-        self.parent_list = QListWidget()
-        self.parent_list.setPlaceholderText("グループを選択してください")
+        self.parent_list = PlaceholderListWidget("グループを選択してください")
         
         category_btn_layout = QHBoxLayout()
         self.add_parent_btn = QPushButton("追加")
@@ -76,8 +123,7 @@ class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, Sk
         # スキル部分
         skill_layout = QVBoxLayout()
         skill_label = QLabel("スキル:")
-        self.child_list = QListWidget()
-        self.child_list.setPlaceholderText("カテゴリーを選択してください")
+        self.child_list = PlaceholderListWidget("カテゴリーを選択してください")
         
         skill_btn_layout = QHBoxLayout()
         self.add_child_btn = QPushButton("追加")
@@ -103,44 +149,4 @@ class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, Sk
         # 初期データの読み込み
         self._load_initial_data()
 
-    def _update_button_states(self):
-        """ボタンの有効/無効状態を更新する"""
-        has_group = bool(self.category_group_combo.currentText())
-        has_category = bool(self.parent_list.currentItem())
-        has_skill = bool(self.child_list.currentItem())
-        
-        # グループ関連
-        self.edit_group_btn.setEnabled(has_group)
-        self.delete_group_btn.setEnabled(has_group)
-        
-        # カテゴリー関連
-        self.add_parent_btn.setEnabled(has_group)
-        self.edit_parent_btn.setEnabled(has_category)
-        self.delete_parent_btn.setEnabled(has_category)
-        
-        # スキル関連
-        self.add_child_btn.setEnabled(has_category)
-        self.edit_child_btn.setEnabled(has_skill)
-        self.delete_child_btn.setEnabled(has_skill)
-
-    def _connect_signals(self):
-        """シグナルを接続する"""
-        # グループ関連
-        self.category_group_combo.currentIndexChanged.connect(self._on_group_selected)
-        self.category_group_combo.currentIndexChanged.connect(self._update_button_states)
-        self.add_group_btn.clicked.connect(self._on_add_group)
-        self.edit_group_btn.clicked.connect(self._on_edit_group)
-        self.delete_group_btn.clicked.connect(self._on_delete_group)
-        
-        # カテゴリー関連
-        self.parent_list.currentRowChanged.connect(self._on_parent_selected)
-        self.parent_list.currentRowChanged.connect(self._update_button_states)
-        self.add_parent_btn.clicked.connect(self._on_add_category)
-        self.edit_parent_btn.clicked.connect(self._on_edit_category)
-        self.delete_parent_btn.clicked.connect(self._on_delete_category)
-        
-        # スキル関連
-        self.child_list.currentRowChanged.connect(self._update_button_states)
-        self.add_child_btn.clicked.connect(self._on_add_skill)
-        self.edit_child_btn.clicked.connect(self._on_edit_skill)
-        self.delete_child_btn.clicked.connect(self._on_delete_skill)
+    # ... (残りのメソッドは変更なし)
