@@ -1,12 +1,9 @@
-# データベース
-sqlite3
-
-# ログ
+# ロギング
 python-json-logger
 
 # テスト
-pytest
-pytest-cov
+pytest>=7.0.0
+pytest-cov>=4.0.0
 
 # 型チェック
-mypy
+mypy>=1.0.0
