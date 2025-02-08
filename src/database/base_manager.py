@@ -1,12 +1,12 @@
-"""データベース基本操作のミックスイン"""
-import os
+"""データベースの基本操作を管理するモジュール"""
 import sqlite3
+import os
 import logging
-from typing import Optional
+from typing import List, Optional, Tuple
 
-class BaseManagerMixin:
-    """データベース基本操作を提供するミックスイン"""
-    
+class BaseManager:
+    """データベースの基本操作を管理するクラス"""
+
     def __init__(self, db_path: str = "skill_matrix.db"):
         """
         初期化
@@ -14,38 +14,29 @@ class BaseManagerMixin:
         Args:
             db_path (str): データベースファイルのパス
         """
+        self.db_path = db_path
         self.logger = logging.getLogger(__name__)
-        self._db_path = db_path
-        self.current_time = "2025-02-08 02:45:53"
+        self.current_time = "2025-02-08 02:48:42"
         
-        # 古いDBファイルが存在する場合は削除
-        if os.path.exists(self._db_path):
-            os.remove(self._db_path)
+        # 古いデータベースを削除
+        if os.path.exists(db_path):
+            os.remove(db_path)
             self.logger.info("古いデータベースファイルを削除しました")
             
-        # テーブルを作成
-        self._create_tables()
+        # データベースを初期化
+        self._init_db()
         self.logger.info("データベースの初期化が完了しました")
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """
-        データベース接続を取得する
-        
-        Returns:
-            sqlite3.Connection: データベース接続
-        """
-        return sqlite3.connect(self._db_path)
-
-    def _create_tables(self):
-        """テーブルを作成する"""
-        with self._get_connection() as conn:
+    def _init_db(self):
+        """データベースを初期化する"""
+        with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
             # グループテーブル
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS groups (
-                    group_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -54,40 +45,282 @@ class BaseManagerMixin:
             # カテゴリーテーブル
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS categories (
-                    category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    group_id INTEGER NOT NULL,
+                    group_name TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    FOREIGN KEY (group_id) REFERENCES groups (group_id),
-                    UNIQUE (name, group_id)
+                    UNIQUE(name, group_name),
+                    FOREIGN KEY (group_name) REFERENCES groups(name)
+                        ON UPDATE CASCADE
+                        ON DELETE CASCADE
                 )
             """)
             
             # スキルテーブル
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS skills (
-                    skill_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    parent_id INTEGER NOT NULL,
+                    category_name TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    FOREIGN KEY (parent_id) REFERENCES categories (category_id),
-                    UNIQUE (name, parent_id)
-                )
-            """)
-            
-            # 評価テーブル
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS evaluations (
-                    evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    skill_id INTEGER NOT NULL,
-                    level INTEGER NOT NULL CHECK (level BETWEEN 0 AND 5),
-                    memo TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    FOREIGN KEY (skill_id) REFERENCES skills (skill_id)
+                    UNIQUE(name, category_name),
+                    FOREIGN KEY (category_name) REFERENCES categories(name)
+                        ON UPDATE CASCADE
+                        ON DELETE CASCADE
                 )
             """)
             
             conn.commit()
+
+    def get_groups(self) -> List[str]:
+        """
+        全てのグループ名を取得
+        
+        Returns:
+            List[str]: グループ名のリスト
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM groups ORDER BY name")
+            return [row[0] for row in cursor.fetchall()]
+
+    def add_group(self, name: str) -> bool:
+        """
+        グループを追加
+        
+        Args:
+            name (str): グループ名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO groups (name, created_at, updated_at) VALUES (?, ?, ?)",
+                    (name, self.current_time, self.current_time)
+                )
+                return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def rename_group(self, old_name: str, new_name: str) -> bool:
+        """
+        グループ名を変更
+        
+        Args:
+            old_name (str): 現在のグループ名
+            new_name (str): 新しいグループ名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE groups SET name = ?, updated_at = ? WHERE name = ?",
+                    (new_name, self.current_time, old_name)
+                )
+                return cursor.rowcount > 0
+        except sqlite3.IntegrityError:
+            return False
+
+    def delete_group(self, name: str) -> bool:
+        """
+        グループを削除
+        
+        Args:
+            name (str): グループ名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM groups WHERE name = ?", (name,))
+            return cursor.rowcount > 0
+
+    def get_categories_by_group(self, group_name: str) -> List[str]:
+        """
+        指定したグループのカテゴリー一覧を取得
+        
+        Args:
+            group_name (str): グループ名
+            
+        Returns:
+            List[str]: カテゴリー名のリスト
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM categories WHERE group_name = ? ORDER BY name",
+                (group_name,)
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def add_category(self, name: str, group_name: str) -> bool:
+        """
+        カテゴリーを追加
+        
+        Args:
+            name (str): カテゴリー名
+            group_name (str): グループ名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO categories (name, group_name, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (name, group_name, self.current_time, self.current_time)
+                )
+                return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def rename_category(self, old_name: str, new_name: str, group_name: str) -> bool:
+        """
+        カテゴリー名を変更
+        
+        Args:
+            old_name (str): 現在のカテゴリー名
+            new_name (str): 新しいカテゴリー名
+            group_name (str): グループ名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE categories 
+                    SET name = ?, updated_at = ? 
+                    WHERE name = ? AND group_name = ?
+                    """,
+                    (new_name, self.current_time, old_name, group_name)
+                )
+                return cursor.rowcount > 0
+        except sqlite3.IntegrityError:
+            return False
+
+    def delete_category(self, name: str, group_name: str) -> bool:
+        """
+        カテゴリーを削除
+        
+        Args:
+            name (str): カテゴリー名
+            group_name (str): グループ名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM categories WHERE name = ? AND group_name = ?",
+                (name, group_name)
+            )
+            return cursor.rowcount > 0
+
+    def get_skills_by_parent(self, category_name: str) -> List[str]:
+        """
+        指定したカテゴリーのスキル一覧を取得
+        
+        Args:
+            category_name (str): カテゴリー名
+            
+        Returns:
+            List[str]: スキル名のリスト
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM skills WHERE category_name = ? ORDER BY name",
+                (category_name,)
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def add_skill(self, name: str, category_name: str) -> bool:
+        """
+        スキルを追加
+        
+        Args:
+            name (str): スキル名
+            category_name (str): カテゴリー名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO skills (name, category_name, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (name, category_name, self.current_time, self.current_time)
+                )
+                return True
+        except sqlite3.IntegrityError:
+            return False
+        except Exception as e:
+            self.logger.exception("スキル追加エラー")
+            return False
+
+    def rename_skill(self, old_name: str, new_name: str, category_name: str) -> bool:
+        """
+        スキル名を変更
+        
+        Args:
+            old_name (str): 現在のスキル名
+            new_name (str): 新しいスキル名
+            category_name (str): カテゴリー名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE skills 
+                    SET name = ?, updated_at = ? 
+                    WHERE name = ? AND category_name = ?
+                    """,
+                    (new_name, self.current_time, old_name, category_name)
+                )
+                return cursor.rowcount > 0
+        except sqlite3.IntegrityError:
+            return False
+
+    def delete_skill(self, name: str, category_name: str) -> bool:
+        """
+        スキルを削除
+        
+        Args:
+            name (str): スキル名
+            category_name (str): カテゴリー名
+            
+        Returns:
+            bool: 成功したらTrue
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM skills WHERE name = ? AND category_name = ?",
+                (name, category_name)
+            )
+            return cursor.rowcount > 0
