@@ -49,6 +49,10 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(splitter)
 
+        # デバッグ用：初期データの読み込みを確認
+        self.logger.info("初期データの読み込みを開始")
+        self._load_initial_data()
+
     def _create_left_pane(self):
         """左ペインの作成"""
         widget = QWidget(self)
@@ -79,6 +83,9 @@ class MainWindow(QMainWindow):
         group_box.setLayout(group_layout)
         layout.addWidget(group_box)
         
+        # シグナル接続
+        self.group_combo.currentTextChanged.connect(self._on_user_group_changed)
+        
         widget.setLayout(layout)
         return widget
 
@@ -97,6 +104,43 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tab_widget)
         widget.setLayout(layout)
         return widget
+
+    def _load_initial_data(self):
+        """初期データの読み込み"""
+        try:
+            # グループの読み込み
+            groups = self._db_manager.get_groups()
+            self.logger.info(f"読み込まれたグループ: {groups}")
+            
+            # グループコンボボックスの更新
+            self.group_combo.clear()
+            self.group_combo.addItems(groups)
+            
+            # 最初のグループのユーザーを表示
+            if groups:
+                self._on_user_group_changed(groups[0])
+                
+        except Exception as e:
+            self.logger.exception("初期データ読み込みエラー")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                "初期データの読み込みに失敗しました。"
+            )
+
+    def _on_user_group_changed(self, group_name: str):
+        """ユーザーリストのグループ変更時の処理"""
+        try:
+            if group_name:
+                self.logger.info(f"選択されたグループ: {group_name}")
+                users = self._db_manager.get_users_by_group(group_name)
+                self.logger.info(f"グループのユーザー: {users}")
+                
+                self.user_list.clear()
+                self.user_list.addItems(users)
+                
+        except Exception as e:
+            self.logger.exception("ユーザーリスト更新エラー")
 
     def closeEvent(self, event):
         """ウィンドウを閉じる際の処理"""
