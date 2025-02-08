@@ -6,6 +6,10 @@ from PyQt6.QtWidgets import (
     QLabel, QFrame
 )
 from PyQt6.QtCore import Qt
+from ..base.base_widget import BaseWidget  # BaseWidgetのインポートを追加
+from .group_manager import GroupManagerMixin
+from .category_manager import CategoryManagerMixin
+from .skill_manager import SkillManagerMixin
 
 class PlaceholderListWidget(QFrame):
     """プレースホルダー付きリストウィジェット"""
@@ -63,6 +67,10 @@ class PlaceholderListWidget(QFrame):
     def setCurrentRow(self, row: int):
         """指定した行を選択"""
         self.list_widget.setCurrentRow(row)
+
+    def currentRowChanged(self, handler):
+        """行選択変更時のシグナルを接続"""
+        return self.list_widget.currentRowChanged.connect(handler)
 
 class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, SkillManagerMixin):
     """設定ウィジェットの基本クラス"""
@@ -149,4 +157,44 @@ class SettingsWidgetBase(BaseWidget, GroupManagerMixin, CategoryManagerMixin, Sk
         # 初期データの読み込み
         self._load_initial_data()
 
-    # ... (残りのメソッドは変更なし)
+    def _connect_signals(self):
+        """シグナルを接続する"""
+        # グループ関連
+        self.category_group_combo.currentIndexChanged.connect(self._on_group_selected)
+        self.category_group_combo.currentIndexChanged.connect(self._update_button_states)
+        self.add_group_btn.clicked.connect(self._on_add_group)
+        self.edit_group_btn.clicked.connect(self._on_edit_group)
+        self.delete_group_btn.clicked.connect(self._on_delete_group)
+        
+        # カテゴリー関連
+        self.parent_list.currentRowChanged(self._on_parent_selected)
+        self.parent_list.currentRowChanged(self._update_button_states)
+        self.add_parent_btn.clicked.connect(self._on_add_category)
+        self.edit_parent_btn.clicked.connect(self._on_edit_category)
+        self.delete_parent_btn.clicked.connect(self._on_delete_category)
+        
+        # スキル関連
+        self.child_list.currentRowChanged(self._update_button_states)
+        self.add_child_btn.clicked.connect(self._on_add_skill)
+        self.edit_child_btn.clicked.connect(self._on_edit_skill)
+        self.delete_child_btn.clicked.connect(self._on_delete_skill)
+
+    def _update_button_states(self):
+        """ボタンの有効/無効状態を更新する"""
+        has_group = bool(self.category_group_combo.currentText())
+        has_category = bool(self.parent_list.currentItem())
+        has_skill = bool(self.child_list.currentItem())
+        
+        # グループ関連
+        self.edit_group_btn.setEnabled(has_group)
+        self.delete_group_btn.setEnabled(has_group)
+        
+        # カテゴリー関連
+        self.add_parent_btn.setEnabled(has_group)
+        self.edit_parent_btn.setEnabled(has_category)
+        self.delete_parent_btn.setEnabled(has_category)
+        
+        # スキル関連
+        self.add_child_btn.setEnabled(has_category)
+        self.edit_child_btn.setEnabled(has_skill)
+        self.delete_child_btn.setEnabled(has_skill)
