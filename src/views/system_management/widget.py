@@ -2,9 +2,10 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QPushButton, QLabel,
-    QMessageBox, QFrame
+    QMessageBox, QFrame, QSplitter,
+    QComboBox
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from .group_manager import GroupManager
 from .category_manager import CategoryManager
 from .skill_manager import SkillManager
@@ -13,100 +14,142 @@ from ..custom_tab import CategoryTab
 from ...database.database_manager import DatabaseManager
 import logging
 
-class SystemManagementWidget(QWidget):
-    """システム管理ウィジェットクラス"""
+class SystemSettingsTab(QWidget):
+    """初期設定タブ"""
+    
+    # グループ変更シグナル
+    group_changed = pyqtSignal(str)
     
     def __init__(self, db_manager: DatabaseManager, parent=None):
         super().__init__(parent)
-        self.logger = logging.getLogger(__name__)
         self._db = db_manager
+        self.logger = logging.getLogger(__name__)
         self._init_ui()
-    
+        
     def _init_ui(self):
         """UIの初期化"""
         layout = QVBoxLayout()
         
-        # タブウィジェット
-        self.tab_widget = QTabWidget()
+        # グループ選択コンボボックス
+        group_layout = QHBoxLayout()
+        group_layout.addWidget(QLabel("グループ:"))
+        self.group_combo = QComboBox()
+        self.group_combo.currentTextChanged.connect(self._on_group_changed)
+        group_layout.addWidget(self.group_combo)
+        layout.addLayout(group_layout)
         
-        # 初期設定タブ
-        settings_tab = QWidget()
-        settings_layout = QHBoxLayout()
+        # リストと操作ボタンを配置するスプリッター
+        splitter = QSplitter(Qt.Horizontal)
         
         # グループ管理
         self.group_manager = GroupManager(self._db)
-        settings_layout.addWidget(self.group_manager)
+        self.group_manager.group_selected.connect(self._update_group_selection)
+        self.group_manager.group_added.connect(self._reload_groups)
+        self.group_manager.group_deleted.connect(self._reload_groups)
+        splitter.addWidget(self.group_manager)
         
-        # カテゴリー管理
+        # カテゴリー管理（グループ選択時のみ有効）
         self.category_manager = CategoryManager(self._db)
-        settings_layout.addWidget(self.category_manager)
+        self.category_manager.setEnabled(False)
+        self.category_manager.category_selected.connect(self._on_category_changed)
+        splitter.addWidget(self.category_manager)
         
-        # スキル管理
+        # スキル管理用のコンテナ（カテゴリー選択時のみ有効）
+        skill_container = QWidget()
+        skill_layout = QVBoxLayout(skill_container)
+        
+        # スキル管理のタイトル
+        skill_title = QLabel("スキル管理")
+        skill_title.setAlignment(Qt.AlignCenter)
+        skill_layout.addWidget(skill_title)
+        
+        # スキル管理ウィジェット
         self.skill_manager = SkillManager(self._db)
-        settings_layout.addWidget(self.skill_manager)
+        self.skill_manager.setEnabled(False)
+        skill_layout.addWidget(self.skill_manager)
         
-        settings_tab.setLayout(settings_layout)
-        self.tab_widget.addTab(settings_tab, "初期設定")
+        splitter.addWidget(skill_container)
         
-        # データ管理タブ
-        data_tab = DataManagementWidget(self._db)
-        self.tab_widget.addTab(data_tab, "データ管理")
+        # スプリッターの比率を設定
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(2, 1)
         
-        layout.addWidget(self.tab_widget)
+        layout.addWidget(splitter)
         
-        # 新規タブ追加ボタン
+        # 新規タブ追加ボタン（カテゴリー選択時のみ有効）
         add_tab_frame = QFrame()
         add_tab_frame.setFrameStyle(QFrame.StyledPanel)
         add_tab_layout = QHBoxLayout()
         
-        add_tab_btn = QPushButton("選択したカテゴリーで新規タブを追加")
-        add_tab_btn.clicked.connect(self._add_custom_tab)
-        add_tab_layout.addWidget(add_tab_btn)
+        self.add_tab_btn = QPushButton("選択したカテゴリーで新規タブを追加")
+        self.add_tab_btn.clicked.connect(self._add_custom_tab)
+        self.add_tab_btn.setEnabled(False)
+        add_tab_layout.addWidget(self.add_tab_btn)
         
         add_tab_frame.setLayout(add_tab_layout)
         layout.addWidget(add_tab_frame)
         
         self.setLayout(layout)
+        self._load_groups()
     
+    def _load_groups(self):
+        """グループ一覧を読み込む"""
+        try:
+            groups = self._db.get_groups()
+            current_text = self.group_combo.currentText()
+            
+            self.group_combo.clear()
+            self.group_combo.addItems(groups)
+            
+            # 既存の選択を維持
+            if current_text in groups:
+                self.group_combo.setCurrentText(current_text)
+            
+        except Exception as e:
+            self.logger.exception("グループの読み込みに失敗しました")
+            QMessageBox.critical(
+                self,
+                "エラー",
+                f"グループの読み込みに失敗しました: {str(e)}"
+            )
+    
+    def _reload_groups(self):
+        """グループ一覧を再読み込み"""
+        self._load_groups()
+        self.group_changed.emit(self.group_combo.currentText())
+    
+    def _update_group_selection(self, group_name: str):
+        """グループ選択を更新"""
+        if group_name != self.group_combo.currentText():
+            self.group_combo.setCurrentText(group_name)
+    
+    def _on_group_changed(self, group_name: str):
+        """グループ変更時の処理"""
+        self.category_manager.setEnabled(bool(group_name))
+        self.category_manager.load_categories(group_name)
+        self.skill_manager.clear_skills()
+        self.skill_manager.setEnabled(False)
+        self.add_tab_btn.setEnabled(False)
+        self.group_changed.emit(group_name)
+    
+    def _on_category_changed(self, category_name: str):
+        """カテゴリー変更時の処理"""
+        group_name = self.group_combo.currentText()
+        self.skill_manager.setEnabled(bool(category_name))
+        if category_name:
+            self.skill_manager.load_skills(group_name, category_name)
+        else:
+            self.skill_manager.clear_skills()
+        self.add_tab_btn.setEnabled(bool(category_name))
+
     def get_selected_group(self) -> str:
         """選択中のグループ名を取得"""
-        return self.group_manager.get_selected_group()
+        return self.group_combo.currentText()
     
     def get_selected_category(self) -> str:
         """選択中のカテゴリー名を取得"""
         return self.category_manager.get_selected_category()
-    
-    def _add_custom_tab(self):
-        """新規カスタムタブを追加"""
-        group_name = self.get_selected_group()
-        category_name = self.get_selected_category()
-        
-        if not group_name or not category_name:
-            QMessageBox.warning(
-                self,
-                "警告",
-                "新規タブを追加するグループとカテゴリーを選択してください"
-            )
-            return
-            
-        try:
-            # メインウィンドウのタブウィジェットにカスタムタブを追加
-            main_window = self.window()
-            if main_window:
-                category_tab = CategoryTab(
-                    self._db,
-                    group_name,
-                    category_name
-                )
-                main_window.add_custom_tab(category_name, category_tab)
-                self.logger.info(
-                    f"新規タブを追加しました: {category_name} "
-                    f"(グループ: {group_name})"
-                )
-        except Exception as e:
-            self.logger.exception("新規タブの追加に失敗しました")
-            QMessageBox.critical(
-                self,
-                "エラー",
-                f"新規タブの追加に失敗しました: {str(e)}"
-            )
+
+    # ... (残りのメソッドは変更なし)
+
