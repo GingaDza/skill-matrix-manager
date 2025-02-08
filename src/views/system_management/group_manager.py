@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QListWidget,
     QMessageBox
 )
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, Qt
 from ..dialogs import GroupDialog
 from ...database.database_manager import DatabaseManager
 import logging
