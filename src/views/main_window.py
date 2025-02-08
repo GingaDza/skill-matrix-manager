@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from ..database.database_manager import DatabaseManager
 from .system_management import SystemManagementWidget
-from .category_management import CategoryWidget
 
 class MainWindow(QMainWindow):
     """メインウィンドウクラス"""
@@ -51,12 +50,12 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(splitter)
 
     def _create_left_pane(self):
-        """左ペインの作成 (グループ管理)"""
-        widget = QWidget()
+        """左ペインの作成"""
+        widget = QWidget(self)
         layout = QVBoxLayout()
         
         # グループ選択
-        group_box = QGroupBox("グループ選択")
+        group_box = QGroupBox("グループ管理", widget)
         group_layout = QVBoxLayout()
         
         self.group_combo = QComboBox()
@@ -84,26 +83,37 @@ class MainWindow(QMainWindow):
         return widget
 
     def _create_right_pane(self):
-        """右ペインの作成 (タブ管理)"""
-        self.tab_widget = QTabWidget()
+        """右ペインの作成"""
+        widget = QWidget(self)
+        layout = QVBoxLayout()
         
-        # システム管理タブ (デフォルト)
-        system_tab = SystemManagementWidget(self._db_manager)
+        # タブウィジェット
+        self.tab_widget = QTabWidget(widget)
+        
+        # システム管理タブ
+        system_tab = SystemManagementWidget(self._db_manager, self.tab_widget)
         self.tab_widget.addTab(system_tab, "システム管理")
         
-        # 総合評価タブ
-        evaluation_tab = CategoryWidget(self._db_manager, "総合評価")
-        self.tab_widget.addTab(evaluation_tab, "総合評価")
-        
-        return self.tab_widget
+        layout.addWidget(self.tab_widget)
+        widget.setLayout(layout)
+        return widget
 
-    def add_category_tab(self, name: str):
-        """カテゴリータブの追加"""
-        new_tab = CategoryWidget(self._db_manager, name)
-        # システム管理タブの左に挿入
-        self.tab_widget.insertTab(
-            self.tab_widget.count() - 1,
-            new_tab,
-            name
-        )
-
+    def closeEvent(self, event):
+        """ウィンドウを閉じる際の処理"""
+        try:
+            reply = QMessageBox.question(
+                self,
+                "確認",
+                "アプリケーションを終了しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                event.accept()
+            else:
+                event.ignore()
+                
+        except Exception as e:
+            self.logger.exception("終了処理エラー")
+            event.accept()
