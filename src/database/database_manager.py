@@ -10,20 +10,12 @@ class DatabaseManager(IDataManager):
     """データベース操作を管理するクラス"""
     
     def __init__(self, db_path: str = "skill_matrix.db"):
-        """
-        初期化
-        
-        Args:
-            db_path (str): データベースファイルのパス
-        """
+        """初期化"""
         self.db_path = db_path
         self.logger = logging.getLogger(__name__)
-        self.current_time = "2025-02-08 03:28:02"
+        self.current_time = "2025-02-08 03:29:29"
         
-        # データベースディレクトリを作成
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        
-        # データベースを初期化
         self._init_db()
         self.logger.info("データベースの初期化が完了しました")
 
@@ -31,8 +23,6 @@ class DatabaseManager(IDataManager):
         """データベースを初期化する"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
-            # 外部キー制約を有効化
             cursor.execute("PRAGMA foreign_keys = ON")
             
             # グループテーブル
@@ -78,15 +68,7 @@ class DatabaseManager(IDataManager):
             conn.commit()
 
     def add_group(self, name: str) -> bool:
-        """
-        グループを追加
-        
-        Args:
-            name (str): グループ名
-            
-        Returns:
-            bool: 成功したらTrue
-        """
+        """グループを追加"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -103,19 +85,7 @@ class DatabaseManager(IDataManager):
             raise DatabaseError("データベース操作エラー") from e
 
     def get_group_id_by_name(self, name: str) -> Optional[int]:
-        """
-        グループ名からIDを取得
-        
-        Args:
-            name (str): グループ名
-            
-        Returns:
-            Optional[int]: グループID
-            
-        Raises:
-            EntityNotFoundError: グループが見つからない場合
-            DatabaseError: データベース操作エラーの場合
-        """
+        """グループ名からIDを取得"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -130,20 +100,27 @@ class DatabaseManager(IDataManager):
             self.logger.exception("グループID取得エラー")
             raise DatabaseError("データベース操作エラー") from e
 
+    def get_category_id_by_name(self, name: str, group_name: str) -> Optional[int]:
+        """カテゴリー名からIDを取得"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id FROM categories WHERE name = ? AND group_name = ?",
+                    (name, group_name)
+                )
+                result = cursor.fetchone()
+                if not result:
+                    raise EntityNotFoundError(f"カテゴリーが見つかりません: {name} (グループ: {group_name})")
+                return result[0]
+        except EntityNotFoundError:
+            raise
+        except Exception as e:
+            self.logger.exception("カテゴリーID取得エラー")
+            raise DatabaseError("データベース操作エラー") from e
+
     def get_group_by_id(self, group_id: int) -> Tuple[str, str, str]:
-        """
-        グループIDからグループ情報を取得
-        
-        Args:
-            group_id (int): グループID
-            
-        Returns:
-            Tuple[str, str, str]: (name, created_at, updated_at)
-            
-        Raises:
-            EntityNotFoundError: グループが見つからない場合
-            DatabaseError: データベース操作エラーの場合
-        """
+        """グループIDからグループ情報を取得"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
