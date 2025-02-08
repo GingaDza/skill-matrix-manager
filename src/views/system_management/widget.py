@@ -13,9 +13,9 @@ class SystemManagementWidget(QWidget):
         super().__init__(parent)
         self.logger = logging.getLogger(__name__)
         self._db_manager = db_manager
-        self._init_ui()
+        self.init_ui()
 
-    def _init_ui(self):
+    def init_ui(self):
         """UIの初期化"""
         layout = QVBoxLayout()
         
